@@ -86,10 +86,55 @@ def scan_gdrive():
     print(f"Extraction complete. Scanned {len(visited_folders)} folders and found {len(manifest)} files.", file=sys.stderr)
     return manifest
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2 or not sys.argv[1].startswith("gdrive://"):
-        print("Usage: python3 scanner.py gdrive://root")
-        sys.exit(1)
+def scan_local(root_path):
+    manifest = []
     
-    data = scan_gdrive()
+    abs_path = os.path.abspath(root_path)
+    drive, path_part = os.path.splitdrive(abs_path)
+    if path_part in ['\\', '/']:
+        print("Error: Scanning a root system directory is blocked to prevent reorganizing critical system files.", file=sys.stderr)
+        sys.exit(1)
+
+    if not os.path.exists(root_path):
+        print(f"Path not found: {root_path}", file=sys.stderr)
+        return manifest
+        
+    base_prefix = abs_path
+    for current_path, dirs, files in os.walk(base_prefix):
+        for f in files:
+            full_path = os.path.join(current_path, f)
+            try:
+                stat = os.stat(full_path)
+                rel_path = current_path[len(base_prefix):].replace("\\", "/")
+                if not rel_path: 
+                    rel_path = "/"
+                elif not rel_path.startswith("/"): 
+                    rel_path = "/" + rel_path
+                    
+                manifest.append({
+                    'file_id': full_path,
+                    'file_name': f,
+                    'current_path': rel_path,
+                    'modified': stat.st_mtime,
+                    'md5': None
+                })
+            except Exception:
+                pass
+    print(f"Extraction complete. Found {len(manifest)} local files.", file=sys.stderr)
+    return manifest
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python3 scanner.py [gdrive://root | /local/path]")
+        sys.exit(1)
+        
+    path = sys.argv[1]
+    if path.startswith("gdrive://"):
+        data = scan_gdrive()
+    else:
+        if not os.path.isdir(path):
+            print(f"Error: Directory {path} not found.", file=sys.stderr)
+            sys.exit(1)
+        data = scan_local(path)
+        
     print(json.dumps(data, indent=2))
