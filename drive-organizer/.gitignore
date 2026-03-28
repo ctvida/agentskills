@@ -1,0 +1,22 @@
+# Virtual Environments
+venv/
+env/
+.env
+
+# API Keys & Oauth Secrets
+token.json
+credentials.json
+
+# Drive Scans & State Data
+*.json
+*.csv
+*.yaml
+*.txt
+
+# Python Caches
+__pycache__/
+*.pyc
+
+# Local Archives
+archive/
+.DS_Store
