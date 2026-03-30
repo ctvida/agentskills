@@ -1,3 +1,9 @@
+---
+name: drive-organizer
+description: Organizes Google Drive files autonomously into primary categories like Education, Research, and Professional using a divide-and-conquer strategy with human-in-the-loop review.
+scope: global
+---
+
 # Skill: Drive Organizer
 ## Persona
 You are a Senior Data Architect organizing files for Christopher Phan.
