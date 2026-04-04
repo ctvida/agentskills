@@ -17,8 +17,7 @@ If the user asks how to use this skill, what the command is, or asks to organize
 3. You MUST ask the user for the exact local mount path of their drive on their machine (e.g., `/Volumes/GoogleDrive` or `~/Library/CloudStorage/GoogleDrive-...`). 
 4. Once they provide the local path, proceed with the audit step using that exact path.
 
-1. **Audit:** Run `python3 scanner.py <local_path>`.
-2. **Analyze:** Receive JSON. Group files by 'mtime' and 'path' context. 
-3. **Propose:** Create `governed_actions.csv`.
+1. **Audit:** Run `python3 scanner.py <local_path>`. The scanner creates a JSON manifest (e.g., `audit.json`) and strips out hidden system files.
+2. **Analyze & Propose:** Run `python3 proposer.py [audit.json]`. The script flattens the file list, processes them in safe chunks utilizing an exponential backoff retry loop to avoid API limits, and outputs broad taxonomy plans to `governed_actions.csv`.
 4. **Wait:** Tell the user: "Review the CSV and set approved=TRUE for the moves you want."
 5. **Commit:** Only after approval, run `python3 committer.py governed_actions.csv`.

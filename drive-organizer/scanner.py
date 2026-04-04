@@ -68,6 +68,8 @@ def scan_gdrive():
                     folder_queue.append((f['id'], new_path))
                 else:
                     # File
+                    if f['name'].startswith('.') or f['name'].lower() in ['thumbs.db', 'desktop.ini']:
+                        continue
                     manifest_path = current_path if current_path else "/"
                     manifest.append({
                         'file_id': f['id'],
@@ -102,6 +104,8 @@ def scan_local(root_path):
     base_prefix = abs_path
     for current_path, dirs, files in os.walk(base_prefix):
         for f in files:
+            if f.startswith('.') or f.lower() in ['thumbs.db', 'desktop.ini']:
+                continue
             full_path = os.path.join(current_path, f)
             try:
                 stat = os.stat(full_path)

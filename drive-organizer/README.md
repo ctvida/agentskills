@@ -3,9 +3,9 @@
 This is a specialized capability skill designed for Claw bots (and compatible autonomous agents) to intelligently organize local hard drives or Google Drive files. It utilizes a "Divide & Conquer" batching architecture alongside an opt-in governance model with human-in-the-loop review.
 
 ## Features
-- **Audit:** Scans a defined local directory or Google Drive path and collects contextual metadata.
-- **Analyze:** Groups files logically by modification time (`mtime`) and path context.
-- **Propose:** Generates a `governed_actions.csv` containing proposed operations.
+- **Audit:** Scans a defined local directory or Google Drive path, ignoring hidden system files, and collecting metadata.
+- **Analyze & Propose:** Flattens the file manifest and submits it to an LLM in rate-limited chunks with exponential backoff.
+- **Output:** Generates a `governed_actions.csv` containing broad folder taxonomy proposals.
 - **Human-in-the-Loop Review:** Halts execution for the user to review proposed actions.
 - **Commit:** Safely executes the approved actions, physically moving files or directly interacting with Google Drive APIs.
 
@@ -37,9 +37,8 @@ If your active bot supports the `<TRUST_REPO>` autonomous registration protocol,
 ## Agent Protocol
 
 When the bot engages this skill, it strictly follows this pipeline:
-1. **Audit:** Executes `python3 scanner.py [gdrive://root | /local/path]`. For example, `python3 scanner.py gdrive://root` or `python3 scanner.py /Users/toraphan/Documents/`.
-2. **Analyze:** Reads the output JSON, grouping files logically.
-3. **Propose:** Proposes actions directly to `governed_actions.csv`.
+1. **Audit:** Executes `python3 scanner.py [gdrive://root | /local/path]`. For example, `python3 scanner.py gdrive://root` or `python3 scanner.py /Users/toraphan/Documents/`. (Scanner safely ignores hidden files like `.DS_Store` and `desktop.ini`).
+2. **Analyze & Propose:** Executes `python3 proposer.py [audit.json]`. The script intelligently reads the flat manifest, batches files, and requests broad folder categorizations from the LLM (featuring exponential backoff for rate-limits). Results are saved to `governed_actions.csv`.
 4. **Wait:** Pauses execution and notifies the user: *"Please review governed_actions.csv and set 'approved=TRUE' for the moves you want."*
 5. **Commit:** Following review, executes `python3 committer.py governed_actions.csv [--local /base/path]`. If organizing local drives, the `--local` flag alongside the base directory is required to physically move the files.
 

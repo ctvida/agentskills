@@ -1,6 +1,7 @@
 import json
 import csv
 import os
+import sys
 import time
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ def get_prompt(batch):
     return f"""
     You are an intelligent file organization agent working as a generalized skill for any drive (local or cloud).
     Your task is to analyze the following files and organize them into a clean, logical, BUT broad folder taxonomy.
+    NOTE: You are receiving a mixed batch of files from across the entire system footprint. Even so, pay close attention to the 'current_path' of each file to understand its context and favor existing structures.
     
     INSTRUCTIONS:
     1. Read the 'file_name' and 'current_path' of each file to understand its context and domain.
@@ -40,28 +42,31 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=50):
     with open(json_input, 'r') as f:
         manifest = json.load(f)
 
-    print("Phase 1: Grouping files by current path...")
-    path_groups = {}
+    print("Phase 1: Preparing flat list of files...")
+    flat_files = []
     path_map = {}
     for item in manifest:
-        cp = item.get('current_path', '/')
-        if cp not in path_groups:
-            path_groups[cp] = []
-        path_groups[cp].append(item)
-        path_map[item['file_id']] = cp
+        file_name = item.get('file_name', '')
+        if file_name.startswith('.') or file_name.lower() in ['thumbs.db', 'desktop.ini']:
+            continue
+        flat_files.append(item)
+        path_map[item['file_id']] = item.get('current_path', '/')
 
     actionable_decisions = []
     
     print(f"\nPhase 2: Agentic Divide & Conquer...")
-    for current_path, files in path_groups.items():
-        print(f" [ANALYZE] {current_path} ({len(files)} files)")
+    print(f" [ANALYZE] Total {len(flat_files)} files to categorize")
+    
+    # Slice into LLM-safe batches
+    for i in range(0, len(flat_files), batch_size):
+        batch = flat_files[i:i+batch_size]
+        print(f"    -> Submitting chunk {i//batch_size + 1}/{len(flat_files)//batch_size + 1} ({len(batch)} files)...")
         
-        # Slice into LLM-safe batches
-        for i in range(0, len(files), batch_size):
-            batch = files[i:i+batch_size]
-            print(f"    -> Submitting chunk {i//batch_size + 1}/{len(files)//batch_size + 1} ({len(batch)} files)...")
-            
-            prompt = get_prompt(batch)
+        prompt = get_prompt(batch)
+        backoff = 10
+        max_retries = 3
+        
+        for attempt in range(max_retries + 1):
             try:
                 response = model.generate_content(prompt)
                 # Cleanup markdown blocks if AI includes them
@@ -84,9 +89,20 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=50):
                 
                 # Sleep to protect API limits over huge drives
                 time.sleep(2)
+                break
                 
             except Exception as e:
-                print(f"    -> Error analyzing chunk: {e}")
+                error_msg = str(e).lower()
+                if '429' in error_msg or 'quota' in error_msg or 'rate limit' in error_msg or 'exhausted' in error_msg:
+                    if attempt < max_retries:
+                        print(f"    -> Rate limit/quota issue. Retrying in {backoff}s (Attempt {attempt+1}/{max_retries})...")
+                        time.sleep(backoff)
+                        backoff *= 2
+                    else:
+                        print(f"    -> Rate limit exhausted after {max_retries} retries. Skipping chunk.")
+                else:
+                    print(f"    -> Error analyzing chunk: {e}")
+                    break
 
     print("\nPhase 3: Assembling Master Proposals...")
     with open(csv_output, 'w', newline='') as f:
@@ -97,4 +113,5 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=50):
     print(f"Success! {len(actionable_decisions)} actionable moves generated -> {csv_output}")
 
 if __name__ == "__main__":
-    generate_proposal('audit.json', 'governed_actions.csv', threshold=20, batch_size=50)
+    input_file = sys.argv[1] if len(sys.argv) > 1 else 'audit.json'
+    generate_proposal(input_file, 'governed_actions.csv', threshold=20, batch_size=50)
