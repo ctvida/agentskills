@@ -9,6 +9,15 @@ This is a specialized capability skill designed for Claw bots (and compatible au
 - **Human-in-the-Loop Review:** Halts execution for the user to review proposed actions.
 - **Commit:** Safely executes the approved actions, physically moving files or directly interacting with Google Drive APIs.
 
+## Modes
+
+| Mode | Command | Credentials required |
+|------|---------|----------------------|
+| **Local path** | `python3 scanner.py /path/to/folder` | None |
+| **Google Drive API** | `python3 scanner.py gdrive://root` | `credentials.json` in skill dir (see below) |
+
+> **Note:** For most users, the local-path mode is recommended. The Google Drive API mode requires OAuth credentials setup (see below) and is only needed when you want to organize Drive files that are not already mounted locally.
+
 ## Installation & Registration
 
 ### One-Line CLI Install (Recommended)
@@ -32,15 +41,25 @@ If your active bot supports the `<TRUST_REPO>` autonomous registration protocol,
    ```bash
    pip install -r requirements.txt
    ```
-3. Place your Google API `credentials.json` in the root of the skill folder (if targeting Google Drive). Upon first run, it will generate a `token.json` for subsequent auth.
+3. Set your `GEMINI_API_KEY` environment variable (required by `proposer.py`):
+   ```bash
+   export GEMINI_API_KEY=your_key_here
+   # or create a .env file in the skill directory:
+   echo "GEMINI_API_KEY=your_key_here" > .env
+   ```
+4. **Google Drive API only:** Place your `credentials.json` (OAuth 2.0 Desktop client) in the skill directory. On first run a browser window opens for authorization; a `token.json` is saved for reuse.
 
 ## Agent Protocol
 
-When the bot engages this skill, it strictly follows this pipeline:
-1. **Audit:** Executes `python3 scanner.py [gdrive://root | /local/path]`. For example, `python3 scanner.py gdrive://root` or `python3 scanner.py /Users/toraphan/Documents/`. (Scanner safely ignores hidden files like `.DS_Store` and `desktop.ini`).
-2. **Analyze & Propose:** Executes `python3 proposer.py [audit.json]`. The script intelligently reads the flat manifest, batches files, and requests broad folder categorizations from the LLM (featuring exponential backoff for rate-limits). Results are saved to `governed_actions.csv`.
-4. **Wait:** Pauses execution and notifies the user: *"Please review governed_actions.csv and set 'approved=TRUE' for the moves you want."*
-5. **Commit:** Following review, executes `python3 committer.py governed_actions.csv [--local /base/path]`. If organizing local drives, the `--local` flag alongside the base directory is required to physically move the files.
+When the bot engages this skill it strictly follows this pipeline. All output files (`audit.json`, `governed_actions.csv`) are written **to the skill's own directory** regardless of the agent's working directory.
+
+1. **Audit:** `python3 <SKILL_DIR>/scanner.py <confirmed_path>`
+   *(Safely ignores hidden files like `.DS_Store` and `desktop.ini`. Writes `audit.json` to the skill directory.)*
+2. **Propose:** `python3 <SKILL_DIR>/proposer.py`
+   *(Reads `audit.json` from the skill directory, batches files with exponential backoff for rate limits, writes `governed_actions.csv` to the skill directory.)*
+3. **Wait:** Pauses and tells the user: *"Please review governed_actions.csv and set `approved=TRUE` for the moves you want."*
+4. **Commit (local):** `python3 <SKILL_DIR>/committer.py governed_actions.csv --local <confirmed_path>`
+5. **Commit (GDrive API):** `python3 <SKILL_DIR>/committer.py governed_actions.csv`
 
 ## Governance Model
 The skill employs an enforced governance model to prevent unintended destructive actions. The Committer script will **only** execute actions explicitly marked as `TRUE` under the `approved` column in the CSV. Any unapproved or invalid changes are safely ignored.

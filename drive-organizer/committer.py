@@ -1,7 +1,7 @@
 import sys
 import csv
 import os
-from scanner import get_gdrive_service
+
 
 def get_or_create_folder(service, folder_name, parent_id):
     # Escape single quotes in folder name for the query
@@ -55,7 +55,11 @@ def execute_approved_moves(csv_path, is_local=False, local_base="/"):
         print(f"Error: {csv_path} not found.")
         return
 
-    service = get_gdrive_service() if not is_local else None
+    if not is_local:
+        from scanner import get_gdrive_service
+        service = get_gdrive_service()
+    else:
+        service = None
     folder_cache = {}
 
     with open(csv_path, mode='r') as f:

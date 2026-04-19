@@ -1,14 +1,14 @@
 import os
 import sys
 import json
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 def get_gdrive_service():
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
     creds = None
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -141,4 +141,7 @@ if __name__ == "__main__":
             sys.exit(1)
         data = scan_local(path)
         
-    print(json.dumps(data, indent=2))
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audit.json')
+    with open(output_path, 'w') as f:
+        json.dump(data, f, indent=2)
+    print(f"Audit complete. {len(data)} files written to {output_path}", file=sys.stderr)

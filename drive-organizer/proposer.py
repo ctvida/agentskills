@@ -6,8 +6,17 @@ import time
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+load_dotenv()  # optional: picks up .env in CWD if present, safe to keep
+_api_key = os.getenv("GEMINI_API_KEY")
+if not _api_key:
+    print(
+        "Error: GEMINI_API_KEY environment variable is not set.\n"
+        "Set it in your shell, pass it via your agent runtime's env config, "
+        "or create a .env file in the skill directory.",
+        file=sys.stderr
+    )
+    sys.exit(1)
+genai.configure(api_key=_api_key)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
 def get_prompt(batch):
@@ -114,4 +123,8 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=50):
 
 if __name__ == "__main__":
     input_file = sys.argv[1] if len(sys.argv) > 1 else 'audit.json'
-    generate_proposal(input_file, 'governed_actions.csv', threshold=20, batch_size=50)
+    skill_dir = os.path.dirname(os.path.abspath(__file__))
+    if not os.path.isabs(input_file):
+        input_file = os.path.join(skill_dir, input_file)
+    output_file = os.path.join(skill_dir, 'governed_actions.csv')
+    generate_proposal(input_file, output_file, threshold=20, batch_size=50)
