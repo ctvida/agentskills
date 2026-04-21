@@ -12,6 +12,7 @@ credentials.json
 *.csv
 *.yaml
 *.txt
+!requirements.txt
 
 # Python Caches
 __pycache__/
