@@ -42,9 +42,11 @@ preflight:
 1. **Audit:** `python3 <SKILL_DIR>/scanner.py <confirmed_path>`
 2. **Propose:** `python3 <SKILL_DIR>/proposer.py`
    *(reads `audit.json` from the skill directory, writes `governed_actions.csv`)*
-3. **Wait:** Tell the user: *"Please review governed_actions.csv. Set approved=TRUE for any moves you want to proceed with."*
-4. **Commit (local):** `python3 <SKILL_DIR>/committer.py governed_actions.csv --local <confirmed_path>`
-5. **Commit (GDrive API):** `python3 <SKILL_DIR>/committer.py governed_actions.csv`
+3. **Analyze (Optional):** `python3 <SKILL_DIR>/analyzer.py governed_actions.csv [--local]`
+   *(deep content analysis for files marked `/Needs_Content_Analysis/`)*
+4. **Wait:** Tell the user: *"Please review governed_actions.csv. Proposals default to TRUE. Set approved=FALSE for any moves you want to cancel."*
+5. **Commit (local):** `python3 <SKILL_DIR>/committer.py governed_actions.csv --local <confirmed_path>`
+6. **Commit (GDrive API):** `python3 <SKILL_DIR>/committer.py governed_actions.csv`
 
 > [!NOTE]
 > The `preflight:` YAML block is a machine-readable prerequisite declaration. Agent runtimes that support this convention will enforce it automatically before invoking the skill. If your runtime does not support it, implement the prerequisite check manually: ask the user for the target path before running any scripts.

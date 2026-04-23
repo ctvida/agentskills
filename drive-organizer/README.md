@@ -5,6 +5,7 @@ This is a specialized capability skill designed for Claw bots (and compatible au
 ## Features
 - **Audit:** Scans a defined local directory or Google Drive path, ignoring hidden system files, and collecting metadata.
 - **Analyze & Propose:** Flattens the file manifest and submits it to an LLM in rate-limited chunks with exponential backoff.
+- **Deep Analysis (Secondary Phase):** Performs optional file-content analysis using Gemini Flash-Lite for ambiguous files.
 - **Output:** Generates a `governed_actions.csv` containing broad folder taxonomy proposals.
 - **Human-in-the-Loop Review:** Halts execution for the user to review proposed actions.
 - **Commit:** Safely executes the approved actions, physically moving files or directly interacting with Google Drive APIs.
@@ -57,9 +58,11 @@ When the bot engages this skill it strictly follows this pipeline. All output fi
    *(Safely ignores hidden files like `.DS_Store` and `desktop.ini`. Writes `audit.json` to the skill directory.)*
 2. **Propose:** `python3 <SKILL_DIR>/proposer.py`
    *(Reads `audit.json` from the skill directory, batches files with exponential backoff for rate limits, writes `governed_actions.csv` to the skill directory.)*
-3. **Wait:** Pauses and tells the user: *"Please review governed_actions.csv and set `approved=TRUE` for the moves you want."*
-4. **Commit (local):** `python3 <SKILL_DIR>/committer.py governed_actions.csv --local <confirmed_path>`
-5. **Commit (GDrive API):** `python3 <SKILL_DIR>/committer.py governed_actions.csv`
+3. **Analyze (Optional):** `python3 <SKILL_DIR>/analyzer.py governed_actions.csv [--local]`
+   *(Downloads and analyzes contents of ambiguous files mapped to `/Needs_Content_Analysis/` using Gemini Flash-Lite, updating `governed_actions.csv` in-place.)*
+4. **Wait:** Pauses and tells the user: *"Please review governed_actions.csv. Proposals default to TRUE. Set `approved=FALSE` for any moves you want to cancel."*
+5. **Commit (local):** `python3 <SKILL_DIR>/committer.py governed_actions.csv --local <confirmed_path>`
+6. **Commit (GDrive API):** `python3 <SKILL_DIR>/committer.py governed_actions.csv`
 
 ## Governance Model
-The skill employs an enforced governance model to prevent unintended destructive actions. The Committer script will **only** execute actions explicitly marked as `TRUE` under the `approved` column in the CSV. Any unapproved or invalid changes are safely ignored.
+The skill employs an enforced governance model to prevent unintended destructive actions. To optimize for mobile and headless execution, proposals **default to `TRUE`** (Opt-Out Governance). The Committer script will execute all proposed actions unless they are explicitly marked as `FALSE` under the `approved` column in the CSV.
