@@ -43,6 +43,10 @@ def move_gdrive_file(service, file_id, new_parent_id):
 
 import shutil
 
+def normalize_path(p):
+    """Normalize a path for comparison: strip trailing slashes, lowercase."""
+    return p.strip('/').lower() if p else ''
+
 def execute_approved_moves(csv_path, is_local=False, local_base="/"):
     if is_local:
         abs_base = os.path.abspath(local_base)
@@ -67,7 +71,13 @@ def execute_approved_moves(csv_path, is_local=False, local_base="/"):
         for row in reader:
             if row.get('approved', '').strip().upper() == 'TRUE':
                 file_id = row['file_id']
+                current = row.get('current_path', '')
                 target_path = row['proposed_path']
+
+                if normalize_path(current) == normalize_path(target_path):
+                    print(f"  [SKIP] {row['file_name']} — already in correct location.")
+                    continue
+
                 print(f"COMMITTING: Moving {row['file_name']} to {target_path}...")
                 
                 try:

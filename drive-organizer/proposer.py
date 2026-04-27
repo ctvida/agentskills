@@ -19,6 +19,10 @@ if not _api_key:
 genai.configure(api_key=_api_key)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
+def normalize_path(p):
+    """Normalize a path for comparison: strip trailing slashes, lowercase."""
+    return p.strip('/').lower() if p else ''
+
 def get_prompt(grouped_batch):
     return f"""
     You are an intelligent file organization agent working as a generalized skill for any drive (local or cloud).
@@ -26,11 +30,27 @@ def get_prompt(grouped_batch):
     NOTE: You are receiving a batch of files grouped by their 'current_path'. Pay close attention to the 'current_path' to understand its context and favor existing structures.
     
     INSTRUCTIONS:
-    1. Read the 'name' and context of the 'current_path' key to understand its domain.
-    2. FAVOR EXISTING FOLDERS: If the current folder structure is already logical, reuse it. Do NOT invent new folders unless the current path is a generic mess (like '/Downloads/' or '/Desktop/'). Strongly prefer the hierarchy that already exists in the wild. If the current folder is too granular, you can propose moving files up to a higher-level folder.
-    3. APPROPRIATE GRANULARITY: Do NOT go crazy with micro-folders. A folder with only 1 or 2 files defeats the purpose of organization. However, you MUST preserve critical contextual boundaries like Years for taxes or Semesters for academics (e.g., use '/Finance/Taxes/2020/' instead of just '/Finance/Taxes/' or the overly granular '/Finance/Taxes/2020/Q3/Receipts/').
-    4. CATEGORIZE: Assign each file a proposed_path.
-    5. AMBIGUOUS FILES: If a file's name and path lack enough context to categorize confidently (e.g., 'IMG_001.jpg' in 'Downloads', or 'document.pdf'), assign its proposed_path exactly as '/Needs_Content_Analysis/'. A secondary phase will later analyze its contents.
+    1. Read the 'name' and 'current_path' of each file to understand its domain.
+
+    2. CONSOLIDATE FIRST: Before deciding where a file belongs, look across ALL
+       the current_paths in this batch. If two or more folders are semantically
+       equivalent (e.g. "/Admin/Financial Planning" and "/Personal/Finance", or
+       "/Work/Projects" and "/Professional/Projects"), you MUST consolidate them
+       into a single canonical folder. Choose the name that is clearest and most
+       consistent with the majority of other paths you can see.
+
+    3. FAVOR EXISTING CANONICAL FOLDERS: Once you have identified the canonical
+       set of folders from step 2, reuse them. Do not invent a new folder if a
+       canonical one already covers the domain.
+
+    4. APPROPRIATE GRANULARITY: Preserve meaningful context boundaries such as
+       years for financial records or semesters for academic files (e.g.,
+       "/Finance/Taxes/2020/" not just "/Finance/Taxes/"). However, do not create
+       micro-folders with only 1-2 files unless the context clearly demands it.
+
+    5. AMBIGUOUS FILES: If a file's name and path lack enough context to
+       categorize confidently, assign proposed_path as "/Needs_Content_Analysis/".
+       A secondary phase will analyze its content later.
     
     FILES TO CATEGORIZE (Grouped by current_path): 
     {json.dumps(grouped_batch, indent=2)}
@@ -100,7 +120,7 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=150):
                 # Filter out pure no-ops and enrich data
                 for file_id, proposed_path in batch_decisions.items():
                     current_path = path_map.get(file_id, '')
-                    if proposed_path != current_path:
+                    if normalize_path(proposed_path) != normalize_path(current_path):
                         actionable_decisions.append({
                             'file_name': name_map.get(file_id, ''),
                             'file_id': file_id,
