@@ -3,6 +3,7 @@ name: drive-organizer
 description: Organizes local directories or Google Drive (via local mount or API) into a broad folder taxonomy using a divide-and-conquer strategy with human-in-the-loop review before any files are moved.
 scope: global
 sandbox: host
+workflow_auto_approve: true
 preflight:
   ask: |
     Which drive or directory would you like me to organize? Please provide the exact local path.
