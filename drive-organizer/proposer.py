@@ -3,7 +3,8 @@ import csv
 import os
 import sys
 import time
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()  # optional: picks up .env in CWD if present, safe to keep
@@ -16,8 +17,12 @@ if not _api_key:
         file=sys.stderr
     )
     sys.exit(1)
-genai.configure(api_key=_api_key)
-model = genai.GenerativeModel('gemini-2.5-flash')
+
+client = genai.Client(api_key=_api_key)
+# Most cost-efficient Gemini model; optimized for high-volume agentic tasks and data extraction.
+# NOTE: This is a preview model — rate limits may be more restrictive than stable models.
+# If you hit persistent 429s, fall back to gemini-2.5-flash-lite or gemini-2.0-flash.
+MODEL = "gemini-3.1-flash-lite-preview"
 
 def normalize_path(p):
     """Normalize a path for comparison: strip trailing slashes, lowercase."""
@@ -87,10 +92,12 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=150):
     print(f"\nPhase 2: Agentic Divide & Conquer...")
     print(f" [ANALYZE] Total {len(flat_files)} files to categorize")
     
-    # Slice into LLM-safe batches
+    num_chunks = (len(flat_files) + batch_size - 1) // batch_size
+    
     for i in range(0, len(flat_files), batch_size):
+        chunk_num = i // batch_size + 1
         batch_files = flat_files[i:i+batch_size]
-        print(f"    -> Submitting chunk {i//batch_size + 1}/{len(flat_files)//batch_size + 1} ({len(batch_files)} files)...")
+        print(f"    -> Submitting chunk {chunk_num}/{num_chunks} ({len(batch_files)} files)...")
         
         grouped_batch = {}
         for f in batch_files:
@@ -103,14 +110,15 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=150):
             })
             
         prompt = get_prompt(grouped_batch)
-        backoff = 10
-        max_retries = 3
+        backoff = 30  # Start with 30s — enough to clear a 15 RPM window
+        max_retries = 5
         
         for attempt in range(max_retries + 1):
             try:
-                response = model.generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
+                response = client.models.generate_content(
+                    model=MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
                         response_mime_type="application/json"
                     )
                 )
@@ -129,17 +137,18 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=150):
                             'approved': 'TRUE'
                         })
                 
-                # Sleep to protect API limits over huge drives
-                time.sleep(2)
+                # Pause between chunks to stay under the RPM limit
+                if chunk_num < num_chunks:
+                    time.sleep(5)
                 break
                 
             except Exception as e:
                 error_msg = str(e).lower()
-                if '429' in error_msg or 'quota' in error_msg or 'rate limit' in error_msg or 'exhausted' in error_msg:
+                if '429' in error_msg or 'quota' in error_msg or 'rate limit' in error_msg or 'exhausted' in error_msg or 'resource_exhausted' in error_msg:
                     if attempt < max_retries:
-                        print(f"    -> Rate limit/quota issue. Retrying in {backoff}s (Attempt {attempt+1}/{max_retries})...")
-                        time.sleep(backoff)
-                        backoff *= 2
+                        wait = backoff * (2 ** attempt)
+                        print(f"    -> Rate limit. Waiting {wait}s (Attempt {attempt+1}/{max_retries})...")
+                        time.sleep(wait)
                     else:
                         print(f"    -> Rate limit exhausted after {max_retries} retries. Skipping chunk.")
                 else:
