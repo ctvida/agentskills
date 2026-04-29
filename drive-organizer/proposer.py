@@ -1,6 +1,7 @@
 import json
 import csv
 import os
+import re
 import sys
 import time
 from google import genai
@@ -24,50 +25,168 @@ client = genai.Client(api_key=_api_key)
 # If you hit persistent 429s, fall back to gemini-2.5-flash-lite or gemini-2.0-flash.
 MODEL = "gemini-3.1-flash-lite-preview"
 
+# Marker for folders the taxonomy says need per-file content analysis
+_AMBIGUOUS_CANONICAL = "/Needs_Content_Analysis/"
+
+# Detects file names that differ only by a numeric index or timestamp
+# (e.g. IMG_0042.jpg, DSC_1234.JPG, app_2024-01-01.log, frame_00012.png)
+_SEQUENTIAL_RE = re.compile(
+    r'^(.*?)(img_|dsc_|frame_|photo_|clip_|vid_)?(\d{3,}|\d{4}-\d{2}-\d{2})(.*?)(\.[a-zA-Z0-9]+)?$',
+    re.IGNORECASE
+)
+
 def normalize_path(p):
     """Normalize a path for comparison: strip trailing slashes, lowercase."""
     return p.strip('/').lower() if p else ''
 
-def get_prompt(grouped_batch):
-    return f"""
-    You are an intelligent file organization agent working as a generalized skill for any drive (local or cloud).
-    Your task is to analyze the following files and organize them into a clean, logical, BUT broad folder taxonomy.
-    NOTE: You are receiving a batch of files grouped by their 'current_path'. Pay close attention to the 'current_path' to understand its context and favor existing structures.
-    
-    INSTRUCTIONS:
-    1. Read the 'name' and 'current_path' of each file to understand its domain.
+def is_sequential_name(name):
+    """Return True if the file name looks like it belongs to a numbered/timestamp sequence."""
+    return bool(_SEQUENTIAL_RE.match(os.path.splitext(name)[0] + (os.path.splitext(name)[1] or '')))
 
-    2. CONSOLIDATE FIRST: Before deciding where a file belongs, look across ALL
-       the current_paths in this batch. If two or more folders are semantically
-       equivalent (e.g. "/Admin/Financial Planning" and "/Personal/Finance", or
-       "/Work/Projects" and "/Professional/Projects"), you MUST consolidate them
-       into a single canonical folder. Choose the name that is clearest and most
-       consistent with the majority of other paths you can see.
-
-    3. FAVOR EXISTING CANONICAL FOLDERS: Once you have identified the canonical
-       set of folders from step 2, reuse them. Do not invent a new folder if a
-       canonical one already covers the domain.
-
-    4. APPROPRIATE GRANULARITY: Preserve meaningful context boundaries such as
-       years for financial records or semesters for academic files (e.g.,
-       "/Finance/Taxes/2020/" not just "/Finance/Taxes/"). However, do not create
-       micro-folders with only 1-2 files unless the context clearly demands it.
-
-    5. AMBIGUOUS FILES: If a file's name and path lack enough context to
-       categorize confidently, assign proposed_path as "/Needs_Content_Analysis/".
-       A secondary phase will analyze its content later.
-    
-    FILES TO CATEGORIZE (Grouped by current_path): 
-    {json.dumps(grouped_batch, indent=2)}
-    
-    Return ONLY valid JSON representing your decisions as a flat dictionary mapping 'id' to 'proposed_path':
-    {{
-        "file_123": "/Your_Generated_Category/Subcategory/",
-        "file_456": "/Another_Category/"
-    }}
+def build_folder_samples(flat_files):
     """
+    Group all files by current_path, returning the full list of file names per folder.
 
-def generate_proposal(json_input, csv_output, threshold=20, batch_size=150):
+    Exception: folders where the majority of file names are numerically sequential or
+    timestamp-patterned (e.g. IMG_0001..IMG_0800) carry no extra semantic signal past
+    the first few names. For those, cap at 8 names and annotate the remainder count.
+    """
+    folders = {}
+    for f in flat_files:
+        cp = f.get('current_path', '/')
+        folders.setdefault(cp, []).append(f.get('file_name', ''))
+
+    result = {}
+    for cp, names in folders.items():
+        sequential_count = sum(1 for n in names if is_sequential_name(n))
+        if len(names) > 8 and sequential_count / len(names) > 0.7:
+            result[cp] = names[:8] + [f"... and {len(names) - 8} more similarly-named files"]
+        else:
+            result[cp] = names
+    return result
+
+def get_taxonomy_prompt(folder_samples):
+    return f"""
+You are a file organization expert. You will receive the complete folder structure of a
+Google Drive, with each folder path paired with the file names it currently contains.
+
+Your task: produce a canonical folder taxonomy by consolidating semantically equivalent
+or redundant folders into clean, descriptive paths.
+
+RULES:
+1. CONSOLIDATE: If two or more folders are semantically equivalent (e.g.
+   "/Professional/Career/Job_Search/" and "/Career/Job_Search/"), merge them into
+   ONE canonical path. Choose the clearest, most consistent name.
+
+2. USE FILE NAMES: Use the listed file names to understand a folder's true domain.
+   A folder named "/Misc/" containing W2s and tax returns should map to
+   "/Finance/Taxes/" — not "/Misc/".
+
+3. INVENT BETTER NAMES: You are encouraged to propose cleaner canonical paths that
+   better reflect the content. Do not merely remap existing names if a better
+   structure is apparent.
+
+4. COMPLETENESS: Every input folder path MUST appear as a key in your output JSON.
+   Do not omit any path.
+
+5. GRANULARITY: Preserve meaningful context boundaries (e.g. years for tax records,
+   semesters for academic files). Avoid micro-folders with only 1–2 files.
+
+6. AMBIGUOUS FOLDERS: If a folder's name and files lack enough context to categorize
+   confidently, map it to "{_AMBIGUOUS_CANONICAL}". A secondary per-file phase will
+   handle those files.
+
+CURRENT FOLDER STRUCTURE (path -> file names):
+{json.dumps(folder_samples, indent=2)}
+
+Return ONLY valid JSON mapping every source path to its canonical path:
+{{
+    "/source/path/": "/Canonical/Path/",
+    ...
+}}
+"""
+
+def get_prompt(grouped_batch, taxonomy):
+    taxonomy_lines = "\n".join(
+        f'  "{src}" -> "{canon}"'
+        for src, canon in sorted(taxonomy.items())
+        if normalize_path(canon) != normalize_path(_AMBIGUOUS_CANONICAL)
+    )
+    return f"""
+You are an intelligent file organization agent. You are categorizing files that could
+not be confidently classified by folder-level analysis alone.
+
+CANONICAL FOLDER VOCABULARY
+(your proposed_path values MUST use folder names from this list):
+{taxonomy_lines}
+
+INSTRUCTIONS:
+1. Assign each file a proposed_path drawn from the CANONICAL FOLDER VOCABULARY above.
+2. You MAY extend a canonical path with additional subfolders where clearly warranted
+   (e.g. "/Finance/Taxes/2023/"), but MUST NOT introduce a new top-level or mid-level
+   folder name that does not appear in the vocabulary.
+3. Use the file name and its current_path as context to choose the best destination.
+4. If the file is still genuinely ambiguous, assign "{_AMBIGUOUS_CANONICAL}".
+
+FILES TO CATEGORIZE (Grouped by current_path):
+{json.dumps(grouped_batch, indent=2)}
+
+Return ONLY valid JSON mapping 'id' to 'proposed_path':
+{{
+    "file_123": "/Canonical/Path/",
+    "file_456": "/Canonical/Path/Subfolder/"
+}}
+"""
+
+def call_llm_with_retry(prompt, label="LLM call"):
+    """Call the LLM with exponential backoff on rate-limit errors. Returns parsed JSON or None."""
+    backoff = 30  # Start with 30s — enough to clear a 15 RPM window
+    max_retries = 5
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
+            return json.loads(response.text.strip())
+        except Exception as e:
+            error_msg = str(e).lower()
+            if any(k in error_msg for k in ('429', 'quota', 'rate limit', 'exhausted', 'resource_exhausted')):
+                if attempt < max_retries:
+                    wait = backoff * (2 ** attempt)
+                    print(f"    -> Rate limit [{label}]. Waiting {wait}s (Attempt {attempt+1}/{max_retries})...")
+                    time.sleep(wait)
+                else:
+                    print(f"    -> Rate limit exhausted after {max_retries} retries for [{label}]. Skipping.")
+                    return None
+            else:
+                print(f"    -> Error [{label}]: {e}")
+                return None
+
+def build_taxonomy(folder_samples):
+    """
+    Phase 2: Call the LLM once with all folders + file names to produce a
+    global {source_path -> canonical_path} taxonomy. Prints the mapping for inspection.
+    """
+    print(f"  [TAXONOMY] Sending {len(folder_samples)} folders to LLM for canonical mapping...")
+    prompt = get_taxonomy_prompt(folder_samples)
+    taxonomy = call_llm_with_retry(prompt, label="taxonomy")
+    if not taxonomy:
+        print("  [TAXONOMY] Failed to build taxonomy. Ambiguous-mode fallback for all files.")
+        return {}
+
+    print(f"  [TAXONOMY] Canonical mapping established ({len(taxonomy)} folders):")
+    for src, canon in sorted(taxonomy.items()):
+        if normalize_path(src) == normalize_path(canon):
+            print(f"    {'[=]':5s} {src}")
+        else:
+            print(f"    {src!r:50s} -> {canon!r}")
+    return taxonomy
+
+def generate_proposal(json_input, csv_output, batch_size=150):
     if not os.path.exists(json_input):
         print(f"Error: {json_input} not found.")
         return
@@ -75,6 +194,7 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=150):
     with open(json_input, 'r') as f:
         manifest = json.load(f)
 
+    # ── Phase 1: Prepare flat list ────────────────────────────────────────────
     print("Phase 1: Preparing flat list of files...")
     flat_files = []
     name_map = {}
@@ -87,80 +207,86 @@ def generate_proposal(json_input, csv_output, threshold=20, batch_size=150):
         name_map[item['file_id']] = file_name
         path_map[item['file_id']] = item.get('current_path', '/')
 
-    actionable_decisions = []
-    
-    print(f"\nPhase 2: Agentic Divide & Conquer...")
-    print(f" [ANALYZE] Total {len(flat_files)} files to categorize")
-    
-    num_chunks = (len(flat_files) + batch_size - 1) // batch_size
-    
-    for i in range(0, len(flat_files), batch_size):
-        chunk_num = i // batch_size + 1
-        batch_files = flat_files[i:i+batch_size]
-        print(f"    -> Submitting chunk {chunk_num}/{num_chunks} ({len(batch_files)} files)...")
-        
-        grouped_batch = {}
-        for f in batch_files:
-            cp = f.get('current_path', '/')
-            if cp not in grouped_batch:
-                grouped_batch[cp] = []
-            grouped_batch[cp].append({
-                "id": f['file_id'],
-                "name": f.get('file_name', '')
-            })
-            
-        prompt = get_prompt(grouped_batch)
-        backoff = 30  # Start with 30s — enough to clear a 15 RPM window
-        max_retries = 5
-        
-        for attempt in range(max_retries + 1):
-            try:
-                response = client.models.generate_content(
-                    model=MODEL,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json"
-                    )
-                )
-                
-                batch_decisions = json.loads(response.text.strip())
-                
-                # Filter out pure no-ops and enrich data
-                for file_id, proposed_path in batch_decisions.items():
-                    current_path = path_map.get(file_id, '')
-                    if normalize_path(proposed_path) != normalize_path(current_path):
-                        actionable_decisions.append({
-                            'file_name': name_map.get(file_id, ''),
-                            'file_id': file_id,
-                            'current_path': current_path,
-                            'proposed_path': proposed_path,
-                            'approved': 'TRUE'
-                        })
-                
-                # Pause between chunks to stay under the RPM limit
-                if chunk_num < num_chunks:
-                    time.sleep(5)
-                break
-                
-            except Exception as e:
-                error_msg = str(e).lower()
-                if '429' in error_msg or 'quota' in error_msg or 'rate limit' in error_msg or 'exhausted' in error_msg or 'resource_exhausted' in error_msg:
-                    if attempt < max_retries:
-                        wait = backoff * (2 ** attempt)
-                        print(f"    -> Rate limit. Waiting {wait}s (Attempt {attempt+1}/{max_retries})...")
-                        time.sleep(wait)
-                    else:
-                        print(f"    -> Rate limit exhausted after {max_retries} retries. Skipping chunk.")
-                else:
-                    print(f"    -> Error analyzing chunk: {e}")
-                    break
+    print(f"  {len(flat_files)} files loaded.")
 
-    print("\nPhase 3: Assembling Master Proposals...")
+    # ── Phase 2: Build global taxonomy ───────────────────────────────────────
+    print("\nPhase 2: Building global canonical taxonomy...")
+    folder_samples = build_folder_samples(flat_files)
+    taxonomy = build_taxonomy(folder_samples)
+
+    # ── Phase 3: Apply taxonomy / per-file LLM for ambiguous files ───────────
+    print("\nPhase 3: Applying taxonomy and categorizing ambiguous files...")
+    actionable_decisions = []
+    ambiguous_files = []
+
+    for file_item in flat_files:
+        file_id = file_item['file_id']
+        current_path = path_map.get(file_id, '/')
+        canonical = taxonomy.get(current_path)
+
+        if canonical is None:
+            # Path not in taxonomy (edge case) — send for per-file analysis
+            ambiguous_files.append(file_item)
+        elif normalize_path(canonical) == normalize_path(_AMBIGUOUS_CANONICAL):
+            # Taxonomy explicitly flagged this whole folder as ambiguous
+            ambiguous_files.append(file_item)
+        else:
+            # Apply taxonomy directly — no per-file LLM call needed
+            if normalize_path(canonical) != normalize_path(current_path):
+                actionable_decisions.append({
+                    'file_name': name_map.get(file_id, ''),
+                    'file_id': file_id,
+                    'current_path': current_path,
+                    'proposed_path': canonical.rstrip('/'),
+                    'approved': 'TRUE'
+                })
+
+    direct_count = len(flat_files) - len(ambiguous_files)
+    print(f"  {direct_count} files resolved via taxonomy directly.")
+    print(f"  {len(ambiguous_files)} files queued for per-file analysis.")
+
+    # Per-file LLM passes for ambiguous files
+    if ambiguous_files and taxonomy:
+        num_chunks = (len(ambiguous_files) + batch_size - 1) // batch_size
+        for i in range(0, len(ambiguous_files), batch_size):
+            chunk_num = i // batch_size + 1
+            batch_files = ambiguous_files[i:i + batch_size]
+            print(f"    -> Submitting ambiguous chunk {chunk_num}/{num_chunks} ({len(batch_files)} files)...")
+
+            grouped_batch = {}
+            for f in batch_files:
+                cp = f.get('current_path', '/')
+                grouped_batch.setdefault(cp, []).append({
+                    "id": f['file_id'],
+                    "name": f.get('file_name', '')
+                })
+
+            prompt = get_prompt(grouped_batch, taxonomy)
+            batch_decisions = call_llm_with_retry(prompt, label=f"chunk {chunk_num}/{num_chunks}")
+            if not batch_decisions:
+                continue
+
+            for file_id, proposed_path in batch_decisions.items():
+                current_path = path_map.get(file_id, '')
+                if normalize_path(proposed_path) != normalize_path(current_path):
+                    actionable_decisions.append({
+                        'file_name': name_map.get(file_id, ''),
+                        'file_id': file_id,
+                        'current_path': current_path,
+                        'proposed_path': proposed_path.rstrip('/'),
+                        'approved': 'TRUE'
+                    })
+
+            if chunk_num < num_chunks:
+                time.sleep(5)
+
+    # ── Phase 4: Write CSV ────────────────────────────────────────────────────
+    print("\nPhase 4: Assembling Master Proposals...")
     with open(csv_output, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['file_name', 'current_path', 'file_id', 'proposed_path', 'approved'])
         writer.writeheader()
         writer.writerows(actionable_decisions)
-        
+
     print(f"Success! {len(actionable_decisions)} actionable moves generated -> {csv_output}")
 
 if __name__ == "__main__":
@@ -169,4 +295,4 @@ if __name__ == "__main__":
     if not os.path.isabs(input_file):
         input_file = os.path.join(skill_dir, input_file)
     output_file = os.path.join(skill_dir, 'governed_actions.csv')
-    generate_proposal(input_file, output_file, threshold=20, batch_size=150)
+    generate_proposal(input_file, output_file, batch_size=150)
