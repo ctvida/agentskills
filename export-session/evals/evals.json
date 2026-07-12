@@ -1,0 +1,23 @@
+{
+  "skill_name": "export-session",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/export-session",
+      "expected_output": "Exports current session to markdown with auto-generated summary and tags. File created in outputs/ai-sessions/ with YAML frontmatter and full conversation text. User sees confirmation with filename, summary, tags, and note (if provided).",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "/export-session --note \"strategy needs testing against Q3 data\"",
+      "expected_output": "Exports current session with user-provided note included in frontmatter and displayed in output message. Note appears in markdown file and in terminal confirmation.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "/export-session fb62a3e8-e2e9-4637-bbd8-cec06dd2a49e --project projects/fundamental-analysis-agent",
+      "expected_output": "Exports past session (by ID) to specified project folder. Creates outputs/ai-sessions/ if needed. Auto-generates summary and tags from that session's conversation. Displays success message with file path and metadata.",
+      "files": []
+    }
+  ]
+}
