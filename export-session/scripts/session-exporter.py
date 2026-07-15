@@ -83,53 +83,41 @@ def get_model() -> str:
 
 def get_session_context(session_id: str) -> str:
     """
-    Retrieve session context. For current session, uses claude -p introspection.
-    For past sessions, attempts to reconstruct from history.
+    Reconstruct the conversation from Claude Code's on-disk JSONL transcript
+    (~/.claude/projects/<slugified-cwd>/<session_id>.jsonl). Works the same
+    way for the current session and past sessions - the transcript is the
+    only complete record of either.
     """
-    # Try to get current session context via claude -p
-    if session_id == "current" or not session_id:
-        try:
-            result = subprocess.run(
-                ["claude", "-p", "Export the entire conversation we've had so far as a markdown code block. Include every prompt and response exactly as it appeared."],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            if result.returncode == 0:
-                return result.stdout
-        except Exception as e:
-            print(f"Warning: Could not retrieve current session via claude -p: {e}", file=sys.stderr)
+    matches = list((Path.home() / ".claude" / "projects").glob(f"*/{session_id}.jsonl"))
+    if not matches:
+        raise FileNotFoundError(f"No transcript found for session {session_id}")
 
-    # For past sessions, try to reconstruct from history.jsonl
-    history_file = Path.home() / ".claude" / "history.jsonl"
-    if not history_file.exists():
-        raise FileNotFoundError(f"Session history not found at {history_file}")
-
-    session_entries = []
-    try:
-        with open(history_file, "r") as f:
-            for line in f:
-                if not line.strip():
-                    continue
+    turns = []
+    with open(matches[0], "r") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
                 entry = json.loads(line)
-                if entry.get("sessionId") == session_id:
-                    session_entries.append(entry)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Error parsing history file: {e}")
+            except json.JSONDecodeError:
+                continue
 
-    if not session_entries:
-        raise ValueError(f"Session {session_id} not found in history")
+            if entry.get("isSidechain"):
+                continue
 
-    # Reconstruct conversation from display fields (simplified)
-    context_lines = []
-    for entry in session_entries:
-        if display := entry.get("display"):
-            context_lines.append(display)
+            content = entry.get("message", {}).get("content")
 
-    if not context_lines:
-        raise ValueError(f"No conversation data found for session {session_id}")
+            if entry.get("type") == "user" and isinstance(content, str):
+                turns.append(f"**User:**\n\n{content}\n")
+            elif entry.get("type") == "assistant" and isinstance(content, list):
+                text = "\n".join(b["text"] for b in content if b.get("type") == "text")
+                if text.strip():
+                    turns.append(f"**Assistant:**\n\n{text}\n")
 
-    return "\n".join(context_lines)
+    if not turns:
+        raise ValueError(f"No conversation content found for session {session_id}")
+
+    return "\n".join(turns)
 
 
 def generate_summary_and_tags(conversation: str, model: str) -> tuple[str, list[str]]:
