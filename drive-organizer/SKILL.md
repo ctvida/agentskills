@@ -42,12 +42,18 @@ preflight:
 **Workflow:**
 1. **Audit:** `python3 <SKILL_DIR>/scanner.py <confirmed_path>`
 2. **Propose:** `python3 <SKILL_DIR>/proposer.py`
-   *(reads `audit.json` from the skill directory, writes `governed_actions.csv`)*
+   *(reads `audit.json` from the skill directory, writes `governed_actions.csv`; canonical
+   folder vocabulary persists in `taxonomy.yaml` across runs — hand-edit it to steer
+   categories, delete it to start fresh)*
 3. **Analyze (Optional):** `python3 <SKILL_DIR>/analyzer.py governed_actions.csv [--local]`
    *(deep content analysis for files marked `/Needs_Content_Analysis/`)*
-4. **Wait:** Tell the user: *"Please review governed_actions.csv. Proposals default to TRUE. Set approved=FALSE for any moves you want to cancel."*
-5. **Commit (local):** `python3 <SKILL_DIR>/committer.py governed_actions.csv --local <confirmed_path>`
-6. **Commit (GDrive API):** `python3 <SKILL_DIR>/committer.py governed_actions.csv`
+4. **Summarize for review:** `python3 <SKILL_DIR>/review.py`
+   *(writes `review_summary.md` — moves grouped by destination with counts and samples)*
+5. **Wait:** Show the user the summary. Tell them: *"Proposals default to TRUE. Reject or
+   re-approve whole destinations with `python3 review.py --reject '/Some/Dest/*'` /
+   `--approve <glob>`, or edit the approved column in governed_actions.csv directly."*
+6. **Commit (local):** `python3 <SKILL_DIR>/committer.py governed_actions.csv --local <confirmed_path>`
+7. **Commit (GDrive API):** `python3 <SKILL_DIR>/committer.py governed_actions.csv`
 
 > [!NOTE]
 > The `preflight:` YAML block is a machine-readable prerequisite declaration. Agent runtimes that support this convention will enforce it automatically before invoking the skill. If your runtime does not support it, implement the prerequisite check manually: ask the user for the target path before running any scripts.

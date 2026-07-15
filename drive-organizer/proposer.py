@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import time
+import yaml
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -27,6 +28,36 @@ MODEL = "gemini-3.1-flash-lite-preview"
 
 # Marker for folders the taxonomy says need per-file content analysis
 _AMBIGUOUS_CANONICAL = "/Needs_Content_Analysis/"
+
+# Canonical vocabulary persisted across runs for consistent categories.
+# Hand-edit to steer taxonomy; delete the file to start fresh.
+TAXONOMY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'taxonomy.yaml')
+
+
+def load_prior_canonical_paths():
+    """Canonical paths from previous runs (empty list if none)."""
+    if not os.path.exists(TAXONOMY_FILE):
+        return []
+    with open(TAXONOMY_FILE) as f:
+        data = yaml.safe_load(f) or {}
+    return [p for p in data.get('canonical_paths', []) if p]
+
+
+def save_canonical_paths(taxonomy):
+    """Merge this run's canonical destinations into taxonomy.yaml.
+
+    Deduped by normalize_path() (case/trailing-slash insensitive), since the LLM
+    isn't guaranteed to reuse identical casing across runs. Prior (already
+    established) casing wins over a new run's casing on conflict, so the
+    persisted vocabulary stays stable instead of flip-flopping.
+    """
+    canon = {}
+    for p in load_prior_canonical_paths() + list(taxonomy.values()):
+        if normalize_path(p) == normalize_path(_AMBIGUOUS_CANONICAL):
+            continue
+        canon.setdefault(normalize_path(p), p.rstrip('/'))
+    with open(TAXONOMY_FILE, 'w') as f:
+        yaml.safe_dump({'canonical_paths': sorted(canon.values())}, f)
 
 # Detects file names that differ only by a numeric index or timestamp
 # (e.g. IMG_0042.jpg, DSC_1234.JPG, app_2024-01-01.log, frame_00012.png)
@@ -65,8 +96,15 @@ def build_folder_samples(flat_files):
             result[cp] = names
     return result
 
-def get_taxonomy_prompt(folder_samples):
-    return f"""
+def get_taxonomy_prompt(folder_samples, prior_paths=None):
+    prior_block = ""
+    if prior_paths:
+        prior_block = f"""
+PRIOR CANONICAL VOCABULARY (established in previous runs — reuse these exact paths
+wherever they fit; only invent a new canonical path when no prior path is appropriate):
+{json.dumps(sorted(prior_paths), indent=2)}
+"""
+    return f"""{prior_block}
 You are a file organization expert. You will receive the complete folder structure of a
 Google Drive, with each folder path paired with the file names it currently contains.
 
@@ -172,11 +210,16 @@ def build_taxonomy(folder_samples):
     global {source_path -> canonical_path} taxonomy. Prints the mapping for inspection.
     """
     print(f"  [TAXONOMY] Sending {len(folder_samples)} folders to LLM for canonical mapping...")
-    prompt = get_taxonomy_prompt(folder_samples)
+    prior_paths = load_prior_canonical_paths()
+    if prior_paths:
+        print(f"  [TAXONOMY] Anchoring to {len(prior_paths)} canonical paths from {TAXONOMY_FILE}")
+    prompt = get_taxonomy_prompt(folder_samples, prior_paths)
     taxonomy = call_llm_with_retry(prompt, label="taxonomy")
     if not taxonomy:
         print("  [TAXONOMY] Failed to build taxonomy. Ambiguous-mode fallback for all files.")
         return {}
+    save_canonical_paths(taxonomy)
+    print(f"  [TAXONOMY] Canonical vocabulary persisted to {TAXONOMY_FILE}")
 
     print(f"  [TAXONOMY] Canonical mapping established ({len(taxonomy)} folders):")
     for src, canon in sorted(taxonomy.items()):
