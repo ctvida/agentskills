@@ -1,64 +1,63 @@
 #!/usr/bin/env python3
 """
-Get the current session ID from Claude Code environment or active session data.
+Get the current session ID, scoped to the project dir of the cwd.
+
+Resolution order (first hit wins):
+  1. session-id env var set by the harness
+  2. newest *.jsonl in ~/.claude/projects/<encoded-cwd>/
+  3. ambiguous (several files touched in the last AMBIGUOUS_WINDOW seconds)
+     -> list candidates on stderr and exit 2 instead of guessing
+
+Never falls back to ~/.claude/history.jsonl: that is global and returns
+whichever window wrote last.
 """
 
-import json
+import datetime
 import os
-import subprocess
+import sys
 from pathlib import Path
 
+ENV_VARS = ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "SESSION_ID")
+AMBIGUOUS_WINDOW = 300  # seconds
 
-def get_current_session_id() -> str:
-    """
-    Attempt to retrieve current session ID.
-    Tries multiple methods in order of preference.
-    """
 
-    # Method 1: Environment variable (if running within Claude Code)
-    if session_id := os.getenv("CLAUDE_SESSION_ID"):
-        return session_id
+def project_dir(cwd: Path) -> Path:
+    # Claude Code encodes the cwd by replacing '/' and '.' with '-'
+    encoded = str(cwd).replace("/", "-").replace(".", "-")
+    return Path.home() / ".claude" / "projects" / encoded
 
-    # Method 2: Try to get from claude process info
-    try:
-        result = subprocess.run(
-            ["ps", "aux"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        # Look for claude process with session ID in args
-        for line in result.stdout.split("\n"):
-            if "claude" in line and "-session" in line:
-                # Parse session ID from command line
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part == "-session" and i + 1 < len(parts):
-                        return parts[i + 1]
-    except Exception:
-        pass
 
-    # Method 3: Check most recent history entry
-    history_file = Path.home() / ".claude" / "history.jsonl"
-    if history_file.exists():
-        try:
-            last_session = None
-            with open(history_file, "r") as f:
-                for line in f:
-                    if line.strip():
-                        entry = json.loads(line)
-                        last_session = entry.get("sessionId")
-            if last_session:
-                return last_session
-        except Exception:
-            pass
+def get_current_session_id(debug: bool = False) -> str:
+    for var in ENV_VARS:
+        if sid := os.getenv(var):
+            if debug:
+                print(f"[debug] rule 1: env {var}", file=sys.stderr)
+            return sid
 
-    # No current session found
-    return ""
+    pdir = project_dir(Path.cwd())
+    files = sorted(pdir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if debug:
+        print(f"[debug] project dir: {pdir} ({len(files)} sessions)", file=sys.stderr)
+    if not files:
+        return ""
+
+    newest = files[0].stat().st_mtime
+    recent = [f for f in files if newest - f.stat().st_mtime < AMBIGUOUS_WINDOW]
+    if len(recent) > 1:
+        print("Ambiguous: multiple sessions active in this project.", file=sys.stderr)
+        for f in recent:
+            ts = datetime.datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds")
+            print(f"  {f.stem}  {ts}", file=sys.stderr)
+        print("Re-run with an explicit session ID.", file=sys.stderr)
+        sys.exit(2)
+
+    if debug:
+        print("[debug] rule 2: newest jsonl in project dir", file=sys.stderr)
+    return files[0].stem
 
 
 if __name__ == "__main__":
-    session_id = get_current_session_id()
+    session_id = get_current_session_id("--debug" in sys.argv)
     if session_id:
         print(session_id)
     else:

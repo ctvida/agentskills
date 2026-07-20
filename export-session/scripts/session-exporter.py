@@ -120,10 +120,33 @@ def get_session_context(session_id: str) -> str:
     return "\n".join(turns)
 
 
+def sample_transcript(text: str, budget: int = 6000) -> str:
+    """Head+middle+tail sample so summaries reflect the whole arc, not just the opening."""
+    if len(text) <= budget:
+        return text
+    chunk = budget // 3
+    mid_start = len(text) // 2 - chunk // 2
+    return (
+        text[:chunk]
+        + "\n[... elided ...]\n"
+        + text[mid_start:mid_start + chunk]
+        + "\n[... elided ...]\n"
+        + text[-chunk:]
+    )
+
+
 def generate_summary_and_tags(conversation: str, model: str) -> tuple[str, list[str]]:
     """
     Use Claude to generate a concise summary and semantic tags.
     """
+    if len(conversation.strip()) < 200:
+        print(
+            f"Error: transcript is only {len(conversation.strip())} chars after stripping - "
+            "likely loaded the wrong session or an empty one. Refusing to summarize emptiness.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     prompt = f"""Analyze this conversation and provide:
 1. A one-line summary (max 60 characters)
 2. Exactly 3-5 semantic tags (comma-separated, lowercase, no brackets)
@@ -139,7 +162,7 @@ Examples:
   Tags: architecture, agents, design-patterns, learning
 
 CONVERSATION:
-{conversation[:3000]}  # Truncate to avoid token limits
+{sample_transcript(conversation)}
 
 Respond with ONLY these two lines (no other text):
 SUMMARY: [your 60-char summary]
@@ -291,6 +314,8 @@ def main():
     parser.add_argument("--session-id", required=True, help="Session ID to export")
     parser.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_argument("--user-note", default="", help="Optional user note")
+    parser.add_argument("--project-root", default="",
+                        help="Project root recorded in frontmatter (defaults to output dir's parent)")
 
     args = parser.parse_args()
 
@@ -307,9 +332,10 @@ def main():
         summary, tags = generate_summary_and_tags(conversation, model)
 
         # Format as markdown
+        project_root = args.project_root or str(Path(args.output_dir).parent.parent)
         markdown, filename = format_markdown(
             conversation, summary, tags, args.session_id,
-            args.user_note, args.output_dir, model
+            args.user_note, project_root, model
         )
 
         # Write to file

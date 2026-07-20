@@ -133,6 +133,7 @@ echo "Exporting session $SESSION_ID..."
 python3 "$SCRIPT_DIR/session-exporter.py" \
   --session-id "$SESSION_ID" \
   --output-dir "$OUTPUT_DIR" \
+  --project-root "$PROJECT_PATH" \
   --user-note "$USER_NOTE"
 
 echo ""

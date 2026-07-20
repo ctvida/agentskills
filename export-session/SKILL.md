@@ -165,6 +165,14 @@ No additional configuration needed—just have `omlx` or MLX installed and the s
 
 ## Edge cases
 
+- **Current-session detection** (`scripts/get-session-id.py`, first hit wins):
+  1. Harness session-id env var (`CLAUDE_SESSION_ID`, `CLAUDE_CODE_SESSION_ID`, `SESSION_ID`).
+  2. Newest `*.jsonl` in `~/.claude/projects/<cwd with / and . replaced by ->/`.
+     Scoped to the current repo — the global `~/.claude/history.jsonl` is never
+     used, since it returns whichever open window wrote last.
+  3. If several sessions in that dir were modified within 5 minutes, it prints
+     the candidates with mtimes and exits 2 — pass an explicit session ID.
+  Add `--debug` to print which rule matched.
 - **No active session**: Prompts for session ID
 - **Session not found**: Explains error and suggests checking `claude --resume`
 - **Outside git repo**: Defaults to `~/outputs/ai-sessions/`
