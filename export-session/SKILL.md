@@ -69,12 +69,27 @@ Export conversations from Claude Code (or other Claude harnesses) to markdown wi
 
 ## What gets exported
 
-- **Full conversation**: All prompts and responses from the session
+- **Full conversation**: All prompts and responses from the session (excluding AI meta-commands — see below)
 - **Auto-generated summary**: One sentence, max 60 characters (e.g., "Fundamental analysis backtesting strategy")
 - **Semantic tags**: 3-5 tags inferred from content (e.g., `[trading, backtesting, strategy, learning]`)
 - **Metadata frontmatter**: Date, session ID, project path, optional user note, model used
 - **Filename**: `YYYY-MM-DD-HHmm-slug.md` derived from summary
 - **Location**: `<project-root>/outputs/ai-sessions/`
+
+### What is excluded
+
+Slash commands that are about the AI/harness rather than the work topic are automatically filtered out, along with their responses:
+
+| Category | Examples |
+|---|---|
+| Token / cost queries | `/usage`, `/cost`, `/tokens`, `/billing`, `/quota` |
+| Context / memory | `/context`, `/memory`, `/history` |
+| Model / config | `/model`, `/settings`, `/config`, `/version` |
+| Session management | `/session`, `/reset`, `/clear`, `/exit`, `/quit` |
+| Account / auth | `/whoami`, `/login`, `/logout`, `/account`, `/profile` |
+| Harness utilities | `/help`, `/status`, `/doctor`, `/debug`, `/trace`, `/reload-plugins`, `/plugin`, `/permissions`, `/upgrade`, `/feedback`, `/report`, `/bug` |
+
+These turns add no value to the exported record and are stripped before writing the markdown file.
 
 ## Frontmatter example
 

@@ -13,6 +13,28 @@ from pathlib import Path
 from typing import Optional
 import re
 
+# Slash commands that are about the AI/harness itself rather than the thread topic.
+# These are filtered out of exports so the conversation reads as a clean record
+# of what was actually worked on.
+_AI_META_COMMAND_RE = re.compile(
+    r"^\s*/"
+    r"(usage|context|cost|model|status|help|memory|permissions|reload[-_]?plugins"
+    r"|plugin|settings|config|version|session|whoami|logout|login|doctor|bug"
+    r"|tokens|billing|limits|quota|upgrade|account|profile|feedback|report"
+    r"|history|debug|trace|reset|clear|exit|quit)"
+    r"(\s|$)",
+    re.IGNORECASE,
+)
+
+
+def is_ai_meta_command(text: str) -> bool:
+    """Return True if a user message is a slash-command about the AI/harness itself.
+
+    These turns are not part of the work conversation and should be excluded from
+    session exports (e.g. /usage, /context, /cost, /memory, /help, etc.).
+    """
+    return bool(_AI_META_COMMAND_RE.match(text.strip()))
+
 def detect_harness() -> str:
     """Detect which AI harness is currently running."""
     # Check for Claude Code
@@ -93,6 +115,7 @@ def get_session_context(session_id: str) -> str:
         raise FileNotFoundError(f"No transcript found for session {session_id}")
 
     turns = []
+    skip_next_assistant = False  # True when the previous user turn was a meta-command
     with open(matches[0], "r") as f:
         for line in f:
             if not line.strip():
@@ -108,8 +131,16 @@ def get_session_context(session_id: str) -> str:
             content = entry.get("message", {}).get("content")
 
             if entry.get("type") == "user" and isinstance(content, str):
+                if is_ai_meta_command(content):
+                    # Skip this turn and suppress the assistant reply that follows
+                    skip_next_assistant = True
+                    continue
+                skip_next_assistant = False
                 turns.append(f"**User:**\n\n{content}\n")
             elif entry.get("type") == "assistant" and isinstance(content, list):
+                if skip_next_assistant:
+                    skip_next_assistant = False
+                    continue
                 text = "\n".join(b["text"] for b in content if b.get("type") == "text")
                 if text.strip():
                     turns.append(f"**Assistant:**\n\n{text}\n")
