@@ -51,6 +51,27 @@ Export conversations from Claude Code (or other Claude harnesses) to markdown wi
 - Minimize digital clutter by only exporting sessions worth keeping
 - Access past conversations without resuming the full session
 
+## Before exporting: write the resume point
+
+A session that ends with unfinished work leaves a resume point, so the next
+session does not re-derive what this one already knew. Do this **before**
+running the export.
+
+**Only when there is something to resume.** If the work is done — shipped,
+verified, nothing blocked, no open question — write no resume point and say so
+in one line. A next action invented for a finished session is worse than none:
+it reads as real to the next session and to any view that surfaces it. Ask
+"what would a fresh session be stuck on?", not "what could be done next" —
+there is always something that could be done next.
+
+1. **Find the destination.** Use the file or frontmatter field named by this
+   repo's `CLAUDE.md`. If it names none, use `ops/next-session-prompt.md`.
+2. **Draft it** — current state, the resume point and what blocks it, findings
+   this session produced, and any open question a fresh session would otherwise
+   re-derive. It is a snapshot, so rewrite in place; never append.
+3. **Show the draft and wait for confirmation** before writing. The operator
+   edits or accepts. Never write it silently.
+
 ## Usage
 
 ```bash
