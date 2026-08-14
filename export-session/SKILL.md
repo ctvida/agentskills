@@ -86,7 +86,36 @@ there is always something that could be done next.
 
 # Specify target project folder explicitly
 /export-session --project projects/arctusai-launch
+
+# Force a separate new file instead of appending to this session's export
+/export-session --new
 ```
+
+## Re-exporting the same session
+
+Exporting a session that already has an export in the target folder **appends
+to that file** rather than writing a second one. The exporter finds the file
+whose frontmatter `session_id` matches, diffs the turns already in it against
+the current transcript, and appends only what came after the last common turn:
+
+```markdown
+<!-- export-continued -->
+### Continued August 10, 2026 at 23:50
+
+**User:**
+...
+```
+
+- `summary`, `tags`, and `user_note` are regenerated over the whole
+  conversation and rewritten in frontmatter; `updated:` records the append.
+- Filename, `date:`, and the `# ` title stay as first written, so links and
+  sort order do not move.
+- Nothing new since the last export prints "already up to date" and writes
+  nothing.
+- `--new` skips all of this and writes a separate file.
+
+Matching is by content, not by a stored offset, so hand-edits to the exported
+markdown do not cause turns to be duplicated or dropped.
 
 ## What gets exported
 
@@ -123,6 +152,7 @@ tags: [trading, backtesting, strategy, learning]
 project: /Users/toraphan/Documents/repos/agentic-os
 user_note: Test this against Q3 earnings data
 model_used: haiku
+updated: 2026-07-12T19:04:11   # only present after an append
 ---
 ```
 
@@ -132,8 +162,9 @@ model_used: haiku
 2. **Summary + tags**: Claude reads the conversation and generates semantic tags and a one-line summary
 3. **Project inference**: Automatically detects project root and target folder, or prompts interactively if ambiguous
 4. **Directory creation**: Creates `outputs/ai-sessions/` if needed
-5. **Markdown formatting**: Exports conversation with clean formatting and metadata
-6. **Output confirmation**: Shows filename, location, tags, and summary
+5. **Prior-export check**: Looks for an existing export of the same session in that folder; if found, appends only the new turns and refreshes its metadata
+6. **Markdown formatting**: Exports conversation with clean formatting and metadata
+7. **Output confirmation**: Shows filename, location, tags, and summary
 
 ## Model selection
 
@@ -231,5 +262,5 @@ Note: Test this against Q3 earnings data
 
 - Exports preserve the full conversation verbatim (no editing or summarization of responses)
 - Auto-generated tags are semantic, not action-oriented (e.g., `[architecture, debugging]` not `[todo, wip]`)
-- Files are immutable once created; create a new export to store updated notes
+- One file per session: re-exporting appends the new turns in place (see above). Use `--new` for a separate file
 - Session IDs can be found in `~/.claude/history.jsonl` or via `claude --resume` interactive list

@@ -8,6 +8,10 @@ set -euo pipefail
 #   export-session <session-id>                            # Export past session
 #   export-session --note "your note here"                 # Add optional user note
 #   export-session --project projects/my-project           # Explicit project folder
+#   export-session --new                                   # Force a new file instead of appending
+#
+# Re-exporting a session that already has an export in the target folder appends
+# only the turns since that export, in place. --new forces a separate file.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
@@ -16,6 +20,7 @@ SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 SESSION_ID=""
 USER_NOTE=""
 PROJECT_PATH=""
+FORCE_NEW=""
 CURRENT_DIR="$(pwd)"
 
 # Parse arguments
@@ -33,13 +38,21 @@ while [[ $# -gt 0 ]]; do
       PROJECT_PATH="$2"
       shift 2
       ;;
+    --new)
+      FORCE_NEW="--new"
+      shift
+      ;;
     --help)
-      echo "Usage: export-session [SESSION_ID] [--note 'note'] [--project path]"
+      echo "Usage: export-session [SESSION_ID] [--note 'note'] [--project path] [--new]"
       echo ""
       echo "  SESSION_ID              Optional session ID to export (positional or --session-id flag)"
       echo "  --session-id ID         Session ID to export (alternative to positional)"
       echo "  --note TEXT             Optional personal note/reminder for this export"
       echo "  --project PATH          Target project folder (relative to repo root)"
+      echo "  --new                   Write a new file instead of appending to an existing export"
+      echo ""
+      echo "By default, re-exporting a session that already has an export in the target"
+      echo "folder appends only the turns added since that export."
       exit 0
       ;;
     -*)
@@ -134,7 +147,8 @@ python3 "$SCRIPT_DIR/session-exporter.py" \
   --session-id "$SESSION_ID" \
   --output-dir "$OUTPUT_DIR" \
   --project-root "$PROJECT_PATH" \
-  --user-note "$USER_NOTE"
+  --user-note "$USER_NOTE" \
+  ${FORCE_NEW:+"$FORCE_NEW"}
 
 echo ""
 echo "✓ Session exported successfully"
