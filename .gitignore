@@ -1,1 +1,5 @@
 drive-organizer/drive_organizer_fixes.md
+
+# Python bytecode from running the skills' own scripts.
+__pycache__/
+*.pyc
