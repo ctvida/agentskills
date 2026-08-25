@@ -66,11 +66,23 @@ is the same failure one directory down.
 ## CLAUDE.md
 
 Claude Code reads `CLAUDE.md`; most other tools read `AGENTS.md`. Write one
-file and symlink, so the two can never drift:
+file and symlink, so the two can never drift.
+
+**Check which one is already the symlink before touching either.** In a repo
+adopted earlier, `AGENTS.md` is often the link and `CLAUDE.md` holds the text.
+Linking blind then produces `AGENTS.md -> CLAUDE.md -> AGENTS.md`: every read
+fails with `OSError: Too many levels of symbolic links`, the content is gone
+from the worktree, and if it is committed it is gone from git too. This
+happened on 2026-08-24 in sales-engine and trading-system, and it took down an
+unrelated tool that walked the repo.
 
 ```bash
-ln -s AGENTS.md CLAUDE.md
+ls -l AGENTS.md CLAUDE.md   # first: which is a link, and where does it point?
+ln -s AGENTS.md CLAUDE.md   # only when AGENTS.md is the real file
 ```
+
+**Edit the real file, never the symlink path.** Writing through the link works
+until someone re-points it; then the edit lands in the wrong file or in a loop.
 
 ## Reviewing an existing file
 
