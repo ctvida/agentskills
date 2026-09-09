@@ -1,46 +1,31 @@
 ---
 name: export-session
-description: Export Claude conversations to searchable markdown with auto-generated summaries and tags. Use this whenever you want to save a valuable conversation for later reference—either the current session or a past session by ID. Works globally across projects. No manual tagging required; Claude generates semantic tags and a concise summary automatically. Optionally add a personal note or reminder. Output goes to <project-root>/outputs/ai-sessions/ organized by semantic tags.
+description: Export Claude conversations to searchable markdown with auto-generated summaries and tags. Use this whenever you want to save a valuable conversation for later reference—either the current session or a past session by ID. Works globally across projects. No manual tagging required; Claude generates semantic tags and a concise summary automatically. Optionally add a personal note or reminder. Output goes to <repo-root>/.workbench/sessions/ organized by semantic tags.
 compatibility: Requires claude CLI (Claude Code) or local inference (Ollama/MLX) or OpenRouter API key. Haiku or equivalent small model recommended.
 ---
 
 # export-session
 
-## Installation
+## Run it
 
-1. **Copy the skill to your global skills directory:**
-   ```bash
-   cp -r <path-to-export-session> ~/.claude/skills/export-session
-   ```
-   Where `<path-to-export-session>` is the directory containing this SKILL.md and the `scripts/` folder.
+```bash
+scripts/export-session.sh                       # current session
+scripts/export-session.sh <SESSION_ID>          # a past session
+scripts/export-session.sh --note "..."          # attach a note
+scripts/export-session.sh --project <path>      # skip the project prompt
+```
 
-2. **Make scripts executable:**
-   ```bash
-   chmod +x ~/.claude/skills/export-session/scripts/*.sh
-   chmod +x ~/.claude/skills/export-session/scripts/*.py
-   ```
+That script is the whole interface. It resolves the session, generates the
+summary and tags, redacts, and writes the file. Do not reimplement any of that
+here; run it and report what it prints.
 
-3. **Verify installation:**
-   - Restart Claude Code or reload skills: `/reload-plugins` or `/plugin`
-   - Type `/export-session --help` to test
-   - Should display usage without errors
+**First, though: [write the resume point](#before-exporting-write-the-resume-point).**
+It goes in a repo file and has to be confirmed by the operator, so it cannot be
+done after the export.
 
-4. **Optional: Configure model** (if not using claude -p)
-   ```bash
-   # For omlx/MLX (Mac):
-   export CLAUDE_EXPORT_MODEL="omlx://hermes-2-pro-mistral"
+Setup, model configuration and troubleshooting are in `README.md`, not here.
 
-   # For Ollama:
-   export CLAUDE_EXPORT_MODEL="ollama://mistral"
-
-   # For OpenRouter:
-   export OPENROUTER_API_KEY="your-key"
-   export CLAUDE_EXPORT_MODEL="openrouter://meta-llama/llama-2-7b-chat:free"
-   ```
-
-## Quick Start
-
-Once installed, use it in any Claude Code session:
+## What it does
 
 Export conversations from Claude Code (or other Claude harnesses) to markdown with auto-generated summaries and semantic tags.
 
@@ -64,58 +49,71 @@ it reads as real to the next session and to any view that surfaces it. Ask
 "what would a fresh session be stuck on?", not "what could be done next" —
 there is always something that could be done next.
 
+### Finished work gets closed, not left blank
+
+Silence is not disposition. A project whose objective was met still renders as
+open, and whatever else infers next actions will eventually write it a new one
+— so the session that met the objective is the one that has to say so.
+
+Check the objective this session was working to (the existing resume point) and
+its done-when, item by item, against what actually happened. If every item is
+settled by a command or a file:
+
+1. Say which done-when items are met and what settles each — a command's
+   output, a path, a commit. Evidence, not assertion.
+2. **Propose completion and wait.** The operator confirms or names what is
+   still open. Never conclude a project silently.
+3. On confirmation, record it through whatever mechanism this repo's
+   `CLAUDE.md` names for completion, which also clears the resume point. If it
+   names none, say the objective is met and leave the record alone.
+
+Completion recorded this way is a **proposal that stops the work generating
+more work**, not an archive. Archiving, un-tracking, or moving anything stays
+the operator's, through their own review.
+
+If any done-when item is unsettled, this section does not apply: write the
+resume point as below, scoped to what is left.
+
+### Write an objective, not a task
+
+A resume point naming one step makes the operator the runtime: the next session
+does that step, stops, and comes back for instructions. Over a week that is
+constant babysitting, which is the opposite of the target state. Write what a
+manager hands a capable report — the goal, how you'll know it's met, and the
+authority to keep going — not a ticket.
+
+The resume point has four parts, in this order:
+
+1. **Objective** — the outcome, and why it matters. Not "run X", but what is
+   true when X has been run and everything it implies is done.
+2. **Plan** — the ordered steps that get there, in the project file. The
+   resume point points at them; it does not inline them.
+3. **Standing instruction** — explicit permission to continue: work the plan
+   top to bottom in one pass, do not stop after step 1, commit per step, and
+   if a step blocks, record the blocker in the project file and continue with
+   the next independent step.
+4. **Done-when** — a short checkable list. Each item is something a command or
+   a file can settle, not a feeling. This is the stop condition; without it,
+   "continue until done" has no end and the agent either quits early or runs
+   forever.
+
+The smallest-first-action rule governs *starting*, never *scope*: name an easy
+entry point, then state the whole objective. A resume point scaled down to one
+step is that rule misapplied.
+
+Keep it to a paragraph the operator can read in a card. Findings, blockers, and
+the plan itself belong in the project file's body, not in the field.
+
+### Procedure
+
 1. **Find the destination.** Use the file or frontmatter field named by this
    repo's `CLAUDE.md`. If it names none, use `ops/next-session-prompt.md`.
-2. **Draft it** — current state, the resume point and what blocks it, findings
-   this session produced, and any open question a fresh session would otherwise
-   re-derive. It is a snapshot, so rewrite in place; never append.
+2. **Draft the objective** in the four-part shape above. Put the plan,
+   the findings this session produced, and any open question a fresh session
+   would otherwise re-derive into the project file's body — the resume point
+   itself is a snapshot, so rewrite in place; never append.
 3. **Show the draft and wait for confirmation** before writing. The operator
    edits or accepts. Never write it silently.
-
-## Usage
-
-```bash
-# Export current session (interactive project selection)
-/export-session
-
-# Export specific past session by ID
-/export-session fb62a3e8-e2e9-4637-bbd8-cec06dd2a49e
-
-# Add a personal note/reminder (optional)
-/export-session --note "this strategy needs testing against Q3 data"
-
-# Specify target project folder explicitly
-/export-session --project projects/arctusai-launch
-
-# Force a separate new file instead of appending to this session's export
-/export-session --new
-```
-
-## Re-exporting the same session
-
-Exporting a session that already has an export in the target folder **appends
-to that file** rather than writing a second one. The exporter finds the file
-whose frontmatter `session_id` matches, diffs the turns already in it against
-the current transcript, and appends only what came after the last common turn:
-
-```markdown
-<!-- export-continued -->
-### Continued August 10, 2026 at 23:50
-
-**User:**
-...
-```
-
-- `summary`, `tags`, and `user_note` are regenerated over the whole
-  conversation and rewritten in frontmatter; `updated:` records the append.
-- Filename, `date:`, and the `# ` title stay as first written, so links and
-  sort order do not move.
-- Nothing new since the last export prints "already up to date" and writes
-  nothing.
-- `--new` skips all of this and writes a separate file.
-
-Matching is by content, not by a stored offset, so hand-edits to the exported
-markdown do not cause turns to be duplicated or dropped.
 
 ## What gets exported
 
@@ -124,7 +122,7 @@ markdown do not cause turns to be duplicated or dropped.
 - **Semantic tags**: 3-5 tags inferred from content (e.g., `[trading, backtesting, strategy, learning]`)
 - **Metadata frontmatter**: Date, session ID, project path, optional user note, model used
 - **Filename**: `YYYY-MM-DD-HHmm-slug.md` derived from summary
-- **Location**: `<project-root>/outputs/ai-sessions/`
+- **Location**: `<repo-root>/.workbench/sessions/`
 
 ### What is excluded
 
@@ -141,6 +139,27 @@ Slash commands that are about the AI/harness rather than the work topic are auto
 
 These turns add no value to the exported record and are stripped before writing the markdown file.
 
+### Redaction (protected terms)
+
+Exports are **verbatim**, and they land in a tracked directory. Anything that
+surfaced in the conversation — including content imported into context from
+personal files like `~/.agents/SOUL.md` — would otherwise be committed.
+
+Before the file is written, every term in `~/.agents/redact-terms.txt` is
+replaced with `[REDACTED]`. One term per line, `#` comments ignored; matching is
+case-insensitive and word-bounded (so `tuck` will not maul `Kentucky`), longest
+term first. Override the path with `EXPORT_SESSION_REDACT_FILE`.
+
+**The terms deliberately do not live in this skill.** This skill is synced
+across machines and tools by skillshare, so a name hardcoded here would leak
+exactly where the rule is trying to prevent. If the file is absent, nothing is
+redacted — the right default for anyone who has not opted in — and the run says
+so on stderr.
+
+Scrubbing happens *before* the write, never as a fix-up afterwards: a file that
+has to be corrected post-write has already been committable for however long
+that took.
+
 ## Frontmatter example
 
 ```yaml
@@ -149,10 +168,9 @@ date: 2026-07-12
 session_id: fb62a3e8-e2e9-4637-bbd8-cec06dd2a49e
 summary: Fundamental analysis backtesting strategy
 tags: [trading, backtesting, strategy, learning]
-project: /Users/toraphan/Documents/repos/agentic-os
+project: ~/repos/agentic-os
 user_note: Test this against Q3 earnings data
 model_used: haiku
-updated: 2026-07-12T19:04:11   # only present after an append
 ---
 ```
 
@@ -161,43 +179,19 @@ updated: 2026-07-12T19:04:11   # only present after an append
 1. **Session extraction**: Retrieves the specified session (current or by ID) via Claude introspection
 2. **Summary + tags**: Claude reads the conversation and generates semantic tags and a one-line summary
 3. **Project inference**: Automatically detects project root and target folder, or prompts interactively if ambiguous
-4. **Directory creation**: Creates `outputs/ai-sessions/` if needed
-5. **Prior-export check**: Looks for an existing export of the same session in that folder; if found, appends only the new turns and refreshes its metadata
-6. **Markdown formatting**: Exports conversation with clean formatting and metadata
-7. **Output confirmation**: Shows filename, location, tags, and summary
-
-## Model selection
-
-The skill automatically detects your harness and uses the most cost-efficient model:
-
-**When running in Claude Code:**
-- Automatically uses `claude -p` with Haiku (lowest-cost reasoning model)
-- No extra charges to your subscription
-- No configuration needed
-
-**When running in other harnesses** (Hermes, local agents, etc.):
-1. **`CLAUDE_EXPORT_MODEL` env var** (explicit override): Set to use a specific model
-   ```bash
-   export CLAUDE_EXPORT_MODEL="mlx://hermes-2-pro-mistral"
-   export CLAUDE_EXPORT_MODEL="ollama://mistral"
-   export CLAUDE_EXPORT_MODEL="openrouter://meta-llama/llama-2-7b-chat:free"
-   ```
-2. **MLX/omlx** (if available on Mac): Uses local Apple Silicon acceleration
-3. **Ollama** (if running): Uses local inference (no external API)
-4. **OpenRouter** (if `OPENROUTER_API_KEY` set): Free/cheap small models
-5. **Fallback**: Claude Code subscription (`claude -p`)
-
-No manual configuration needed—the skill detects your setup and uses what's available, prompting for alternatives if desired.
+4. **Directory creation**: Creates `.workbench/sessions/` if needed
+5. **Markdown formatting**: Exports conversation with clean formatting and metadata
+6. **Output confirmation**: Shows filename, location, tags, and summary
 
 ## Project path resolution
 
-If you're in a git repository, exports default to `<repo-root>/outputs/ai-sessions/` automatically. No prompt unless you want a specific project subfolder.
+If you're in a git repository, exports default to `<repo-root>/.workbench/sessions/` automatically. No prompt unless you want a specific project subfolder.
 
 If you want to export to a specific project instead:
 
 ```
 Export to repo root or a specific project?
-  • (leave blank for /Users/toraphan/Documents/repos)
+  • (leave blank for ~/repos)
   • projects/arctusai-launch
   • projects/fundamental-analysis-agent
   
@@ -211,24 +205,7 @@ export-session --project projects/fundamental-analysis-agent
 export-session --project .  # Explicitly use repo root
 ```
 
-If not in a git repo, defaults to `~/outputs/ai-sessions/`.
-
-## MLX/omlx Setup (Mac users)
-
-If you have MLX and Hermes models on your Mac, the skill will auto-detect and use them:
-
-```bash
-# Model auto-detection order:
-# 1. Check for mlx_lm.generate (Python MLX)
-# 2. Check for omlx CLI (omlx wrapper)
-# 3. Fall back to Ollama, OpenRouter, or claude -p
-
-# To explicitly use a specific model:
-export CLAUDE_EXPORT_MODEL="omlx://hermes-2-pro-mistral"
-export CLAUDE_EXPORT_MODEL="mlx://mistral-7b"
-```
-
-No additional configuration needed—just have `omlx` or MLX installed and the skill will use it.
+If not in a git repo, defaults to `~/.workbench/sessions/`.
 
 ## Edge cases
 
@@ -242,7 +219,7 @@ No additional configuration needed—just have `omlx` or MLX installed and the s
   Add `--debug` to print which rule matched.
 - **No active session**: Prompts for session ID
 - **Session not found**: Explains error and suggests checking `claude --resume`
-- **Outside git repo**: Defaults to `~/outputs/ai-sessions/`
+- **Outside git repo**: Defaults to `~/.workbench/sessions/`
 - **Permission issues**: Notifies user, suggests checking directory permissions
 - **Past session not in history**: Confirms session ID is valid (check `~/.claude/history.jsonl`)
 - **MLX/omlx not found**: Falls back to next available model in priority order
@@ -250,7 +227,7 @@ No additional configuration needed—just have `omlx` or MLX installed and the s
 ## Example output
 
 ```
-✓ Exported to: /Users/toraphan/Documents/repos/agentic-os/outputs/ai-sessions/2026-07-12-1447-fundamental-analysis-backtest.md
+✓ Exported to: ~/repos/agentic-os/.workbench/sessions/2026-07-12-1447-fundamental-analysis-backtest.md
 
 Summary: Fundamental analysis backtesting strategy
 Tags: [trading, backtesting, strategy, learning]
@@ -262,5 +239,5 @@ Note: Test this against Q3 earnings data
 
 - Exports preserve the full conversation verbatim (no editing or summarization of responses)
 - Auto-generated tags are semantic, not action-oriented (e.g., `[architecture, debugging]` not `[todo, wip]`)
-- One file per session: re-exporting appends the new turns in place (see above). Use `--new` for a separate file
+- Files are immutable once created; create a new export to store updated notes
 - Session IDs can be found in `~/.claude/history.jsonl` or via `claude --resume` interactive list
