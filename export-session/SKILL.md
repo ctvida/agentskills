@@ -13,6 +13,7 @@ scripts/export-session.sh                       # current session
 scripts/export-session.sh <SESSION_ID>          # a past session
 scripts/export-session.sh --note "..."          # attach a note
 scripts/export-session.sh --project <path>      # skip the project prompt
+scripts/export-session.sh --new                 # force a separate file
 ```
 
 That script is the whole interface. It resolves the session, generates the
@@ -114,6 +115,27 @@ the plan itself belong in the project file's body, not in the field.
    itself is a snapshot, so rewrite in place; never append.
 3. **Show the draft and wait for confirmation** before writing. The operator
    edits or accepts. Never write it silently.
+
+## Re-exporting a session you continued
+
+**Re-exporting appends, in place, by default.** If the target folder already
+holds an export whose frontmatter records this session id, the exporter diffs
+the turns and writes only the ones added since, under a `### Continued <date>`
+heading. It does not rewrite the earlier text and it does not make a second
+file. Re-exporting a session that has said nothing new prints `already up to
+date` and writes nothing.
+
+This is the normal case: something surfaces during an export, you keep working,
+and you export again. One file per session, growing.
+
+`--new` forces a separate file instead. Use it when the session genuinely
+turned into different work and one record would bury it.
+
+**One thing to know:** the search for an existing export only looks in the
+folder being written to. Exporting the same session to the repo root once and
+to a project subfolder another time produces two files, because the second run
+cannot see the first. Pass the same `--project` both times, or leave it off
+both times.
 
 ## What gets exported
 
