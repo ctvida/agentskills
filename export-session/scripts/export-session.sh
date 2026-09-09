@@ -8,10 +8,6 @@ set -euo pipefail
 #   export-session <session-id>                            # Export past session
 #   export-session --note "your note here"                 # Add optional user note
 #   export-session --project projects/my-project           # Explicit project folder
-#   export-session --new                                   # Force a new file instead of appending
-#
-# Re-exporting a session that already has an export in the target folder appends
-# only the turns since that export, in place. --new forces a separate file.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
@@ -20,7 +16,6 @@ SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 SESSION_ID=""
 USER_NOTE=""
 PROJECT_PATH=""
-FORCE_NEW=""
 CURRENT_DIR="$(pwd)"
 
 # Parse arguments
@@ -38,21 +33,13 @@ while [[ $# -gt 0 ]]; do
       PROJECT_PATH="$2"
       shift 2
       ;;
-    --new)
-      FORCE_NEW="--new"
-      shift
-      ;;
     --help)
-      echo "Usage: export-session [SESSION_ID] [--note 'note'] [--project path] [--new]"
+      echo "Usage: export-session [SESSION_ID] [--note 'note'] [--project path]"
       echo ""
       echo "  SESSION_ID              Optional session ID to export (positional or --session-id flag)"
       echo "  --session-id ID         Session ID to export (alternative to positional)"
       echo "  --note TEXT             Optional personal note/reminder for this export"
       echo "  --project PATH          Target project folder (relative to repo root)"
-      echo "  --new                   Write a new file instead of appending to an existing export"
-      echo ""
-      echo "By default, re-exporting a session that already has an export in the target"
-      echo "folder appends only the turns added since that export."
       exit 0
       ;;
     -*)
@@ -137,9 +124,21 @@ elif [[ ! "$PROJECT_PATH" = /* ]]; then
   PROJECT_PATH="$(cd "$CURRENT_DIR" && cd "$PROJECT_PATH" && pwd)"
 fi
 
-# Ensure output directory exists
-OUTPUT_DIR="$PROJECT_PATH/outputs/ai-sessions"
+# Session exports are local-only working notes, not vault canon: they land in
+# .workbench/sessions/ at the repo root (gitignored, never committed) so a
+# repo that later goes public was never carrying transcripts. PROJECT_PATH may
+# be a subfolder; .workbench/ always lives at the repo root above it.
+REPO_ROOT=$(python3 "$SCRIPT_DIR/get-git-root.py" "$PROJECT_PATH" 2>/dev/null || echo "")
+WORKBENCH_ROOT="${REPO_ROOT:-$PROJECT_PATH}"
+OUTPUT_DIR="$WORKBENCH_ROOT/.workbench/sessions"
 mkdir -p "$OUTPUT_DIR"
+
+GITIGNORE="$WORKBENCH_ROOT/.gitignore"
+if [[ -f "$GITIGNORE" ]] && ! grep -qx "\.workbench/" "$GITIGNORE"; then
+  printf '\n# Local agent workbench: roadmaps, plans, next actions, session logs.\n.workbench/\n' >> "$GITIGNORE"
+elif [[ ! -f "$GITIGNORE" ]] && [[ -n "$REPO_ROOT" ]]; then
+  printf '# Local agent workbench: roadmaps, plans, next actions, session logs.\n.workbench/\n' > "$GITIGNORE"
+fi
 
 # Export the session
 echo "Exporting session $SESSION_ID..."
@@ -147,8 +146,7 @@ python3 "$SCRIPT_DIR/session-exporter.py" \
   --session-id "$SESSION_ID" \
   --output-dir "$OUTPUT_DIR" \
   --project-root "$PROJECT_PATH" \
-  --user-note "$USER_NOTE" \
-  ${FORCE_NEW:+"$FORCE_NEW"}
+  --user-note "$USER_NOTE"
 
 echo ""
 echo "✓ Session exported successfully"

@@ -451,7 +451,15 @@ def redact(text: str, terms: list[str]) -> tuple[str, int]:
     """
     hits = 0
     for term in sorted(terms, key=len, reverse=True):
-        pattern = re.compile(r"(?<!\w)" + re.escape(term) + r"(?!\w)", re.IGNORECASE)
+        # `(?:\\?b)?` absorbs a regex-escape artifact on either side. A logged
+        # `grep "\bTerm\b"` reaches a transcript as `\bTerm\b`, or as `bTerm`
+        # once the backslashes are lost, and a bare `(?<!\w)` guard refuses the
+        # second because `b` is a word character. Caught 2026-08-21 when the
+        # export of a session that was fixing this leaked the term twice.
+        # The outer boundaries still span the whole match, so `bTermless` is
+        # left alone rather than mauled down to `Termless`.
+        pattern = re.compile(
+            r"(?<!\w)(?:\\?b)?" + re.escape(term) + r"(?:\\?b)?(?!\w)", re.IGNORECASE)
         text, n = pattern.subn("[REDACTED]", text)
         hits += n
     return text, hits
