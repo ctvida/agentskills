@@ -131,11 +131,17 @@ and you export again. One file per session, growing.
 `--new` forces a separate file instead. Use it when the session genuinely
 turned into different work and one record would bury it.
 
-**One thing to know:** the search for an existing export only looks in the
-folder being written to. Exporting the same session to the repo root once and
-to a project subfolder another time produces two files, because the second run
-cannot see the first. Pass the same `--project` both times, or leave it off
-both times.
+**The destination is sticky per session.** Once a session has been exported
+somewhere, every later export of that session goes back to the same folder,
+even if you run it from a different repo or directory. Without that, the search
+for an existing export only looks in the folder being written to, so exporting
+one session from two places produced two files. Recorded in
+`~/.local/state/export-session/destinations.json`, which is machine-local and
+deliberately not inside this skill.
+
+Passing `--project` explicitly overrides the sticky destination, which is the
+way to move a session's record on purpose. A missing or corrupt state file
+falls back to the computed destination rather than failing the export.
 
 ## What gets exported
 

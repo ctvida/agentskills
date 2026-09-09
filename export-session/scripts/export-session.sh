@@ -89,6 +89,12 @@ if [[ -z "$SESSION_ID" ]]; then
   fi
 fi
 
+# An explicitly passed --project always wins over the remembered destination.
+PROJECT_EXPLICIT=""
+if [[ -n "$PROJECT_PATH" ]]; then
+  PROJECT_EXPLICIT="1"
+fi
+
 # Resolve project path
 if [[ -z "$PROJECT_PATH" ]]; then
   # If exporting a past session by ID, try to use its original project
@@ -144,6 +150,21 @@ fi
 REPO_ROOT=$(python3 "$SCRIPT_DIR/get-git-root.py" "$PROJECT_PATH" 2>/dev/null || echo "")
 WORKBENCH_ROOT="${REPO_ROOT:-$PROJECT_PATH}"
 OUTPUT_DIR="$WORKBENCH_ROOT/.workbench/sessions"
+
+# Sticky destination. find_existing_export only searches the folder being
+# written to, so exporting one session from two different working directories
+# used to produce two files instead of appending to the first. Once a session
+# has been exported somewhere, it keeps going there unless --project says
+# otherwise.
+if [[ -z "$PROJECT_EXPLICIT" ]]; then
+  STICKY=$(python3 "$SCRIPT_DIR/sticky-dir.py" get "$SESSION_ID" 2>/dev/null || echo "")
+  if [[ -n "$STICKY" && "$STICKY" != "$OUTPUT_DIR" ]]; then
+    echo "Session was last exported to $STICKY; appending there (--project overrides)."
+    OUTPUT_DIR="$STICKY"
+    WORKBENCH_ROOT=$(python3 "$SCRIPT_DIR/get-git-root.py" "$STICKY" 2>/dev/null || echo "$WORKBENCH_ROOT")
+  fi
+fi
+
 mkdir -p "$OUTPUT_DIR"
 
 GITIGNORE="$WORKBENCH_ROOT/.gitignore"
@@ -161,6 +182,8 @@ python3 "$SCRIPT_DIR/session-exporter.py" \
   --project-root "$PROJECT_PATH" \
   --user-note "$USER_NOTE" \
   ${FORCE_NEW:+"$FORCE_NEW"}
+
+python3 "$SCRIPT_DIR/sticky-dir.py" set "$SESSION_ID" "$OUTPUT_DIR" 2>/dev/null || true
 
 echo ""
 echo "✓ Session exported successfully"
