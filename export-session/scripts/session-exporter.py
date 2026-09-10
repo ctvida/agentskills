@@ -281,63 +281,71 @@ Respond with ONLY these two lines (no other text):
 SUMMARY: [your 60-char summary]
 TAGS: [tag1, tag2, tag3, ...]"""
 
-    try:
-        if model in ("claude-p", "claude-p-haiku"):
-            # Use claude -p (subscription, no extra cost)
-            result = subprocess.run(
-                ["claude", "-p", prompt],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-        elif model.startswith("mlx://"):
-            model_name = model.split("://")[1]
-            result = subprocess.run(
-                ["python3", "-m", "mlx_lm.generate", "--model", model_name, "--prompt", prompt, "--max-tokens", "200"],
-                capture_output=True,
-                text=True,
-                timeout=45
-            )
-        elif model.startswith("ollama://"):
-            model_name = model.split("://")[1]
-            result = subprocess.run(
-                ["ollama", "run", model_name, prompt],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-        elif model.startswith("openrouter://"):
-            model_name = model.split("://")[1]
-            # OpenRouter API call
-            result = _call_openrouter(prompt, model_name)
-        else:
-            raise ValueError(f"Unknown model: {model}")
+    # ponytail: two attempts, no fallback. A silent "Exported conversation" placeholder
+    # writes a mis-named file the operator has to fix by hand; failing here costs a re-run
+    # of a command whose transcript is still on disk.
+    for attempt in (1, 2):
+        try:
+            if model in ("claude-p", "claude-p-haiku"):
+                # Use claude -p (subscription, no extra cost)
+                result = subprocess.run(
+                    ["claude", "-p", prompt],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+            elif model.startswith("mlx://"):
+                model_name = model.split("://")[1]
+                result = subprocess.run(
+                    ["python3", "-m", "mlx_lm.generate", "--model", model_name, "--prompt", prompt, "--max-tokens", "200"],
+                    capture_output=True,
+                    text=True,
+                    timeout=45
+                )
+            elif model.startswith("ollama://"):
+                model_name = model.split("://")[1]
+                result = subprocess.run(
+                    ["ollama", "run", model_name, prompt],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            elif model.startswith("openrouter://"):
+                model_name = model.split("://")[1]
+                # OpenRouter API call
+                result = _call_openrouter(prompt, model_name)
+            else:
+                raise ValueError(f"Unknown model: {model}")
 
-        if result.returncode != 0:
-            raise RuntimeError(f"Model inference failed: {result.stderr}")
+            if result.returncode != 0:
+                raise RuntimeError(f"exit {result.returncode}: {result.stderr.strip()[:300]}")
 
-        output = result.stdout.strip()
+            output = result.stdout.strip()
 
-        # Parse response
-        summary = ""
-        tags = []
-        for line in output.split("\n"):
-            if line.startswith("SUMMARY:"):
-                summary = line.replace("SUMMARY:", "").strip()
-            elif line.startswith("TAGS:"):
-                tags_str = line.replace("TAGS:", "").strip()
-                tags = [t.strip() for t in tags_str.split(",")]
+            # Parse response
+            summary = ""
+            tags = []
+            for line in output.split("\n"):
+                if line.startswith("SUMMARY:"):
+                    summary = line.replace("SUMMARY:", "").strip()
+                elif line.startswith("TAGS:"):
+                    tags_str = line.replace("TAGS:", "").strip()
+                    tags = [t.strip() for t in tags_str.split(",") if t.strip()]
 
-        if not summary:
-            summary = "Untitled conversation"
-        if not tags:
-            tags = ["conversation"]
+            if not summary or not tags:
+                raise RuntimeError(f"no SUMMARY/TAGS lines in output: {output[:300]!r}")
 
-        return summary, tags[:5]  # Enforce max 5 tags
+            return summary, tags[:5]  # Enforce max 5 tags
 
-    except Exception as e:
-        print(f"Warning: Could not generate summary via {model}: {e}", file=sys.stderr)
-        return "Exported conversation", ["conversation"]
+        except Exception as e:
+            print(f"Summary attempt {attempt}/2 failed via {model}: {e}", file=sys.stderr)
+
+    print(
+        f"Error: {model} produced no usable summary in 2 attempts. Nothing was written.\n"
+        "Re-run the export, or pass --model to use a different summarizer.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def _call_openrouter(prompt: str, model: str) -> subprocess.CompletedProcess:
@@ -631,6 +639,13 @@ def selftest():
     assert split_turns(appended) == [t.strip() for t in turns], split_turns(appended)
     assert turns_after(split_turns(appended), turns) == []
     assert turns_after(split_turns(appended), turns + ["**User:**\n\nmore\n"]) == ["**User:**\n\nmore\n"]
+
+    # A summarizer that cannot produce a summary must abort, never return a placeholder.
+    try:
+        generate_summary_and_tags("x" * 500, "no-such-model://boom")
+        raise AssertionError("summarizer returned a fallback instead of exiting")
+    except SystemExit as e:
+        assert e.code == 1, e.code
 
     print("selftest ok")
 
