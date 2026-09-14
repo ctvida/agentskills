@@ -46,13 +46,16 @@ def project_dir(cwd: Path) -> Path:
 
 def get_agy_candidates(cwd: Path) -> list[Tuple[float, str, Path]]:
     """
-    Find Antigravity IDE sessions belonging to current project/cwd,
+    Find Antigravity sessions belonging to current project/cwd,
+    checking ~/.gemini/antigravity, antigravity-ide, and antigravity-cli brain directories,
     sorted by transcript.jsonl mtime descending.
     Returns list of (mtime, session_id, transcript_path).
     """
-    brain_dir = Path.home() / ".gemini" / "antigravity-ide" / "brain"
-    if not brain_dir.is_dir():
-        return []
+    brain_dirs = [
+        Path.home() / ".gemini" / "antigravity" / "brain",
+        Path.home() / ".gemini" / "antigravity-ide" / "brain",
+        Path.home() / ".gemini" / "antigravity-cli" / "brain",
+    ]
 
     git_root = find_git_root(cwd)
     project_paths = [str(cwd)]
@@ -60,22 +63,27 @@ def get_agy_candidates(cwd: Path) -> list[Tuple[float, str, Path]]:
         project_paths.append(str(git_root))
 
     candidates = []
-    for subdir in brain_dir.iterdir():
-        if not subdir.is_dir():
+    seen_sessions = set()
+    for brain_dir in brain_dirs:
+        if not brain_dir.is_dir():
             continue
-        transcript = subdir / ".system_generated" / "logs" / "transcript.jsonl"
-        if not transcript.is_file():
-            continue
+        for subdir in brain_dir.iterdir():
+            if not subdir.is_dir() or subdir.name in seen_sessions:
+                continue
+            transcript = subdir / ".system_generated" / "logs" / "transcript.jsonl"
+            if not transcript.is_file():
+                continue
 
-        try:
-            mtime = transcript.stat().st_mtime
-            # Quick check: read the first 10KB to verify this session belongs to this project
-            with open(transcript, "r", errors="ignore") as f:
-                header = f.read(10000)
-                if any(p in header for p in project_paths):
-                    candidates.append((mtime, subdir.name, transcript))
-        except OSError:
-            continue
+            try:
+                mtime = transcript.stat().st_mtime
+                # Quick check: read the first 10KB to verify this session belongs to this project
+                with open(transcript, "r", errors="ignore") as f:
+                    header = f.read(10000)
+                    if any(p in header for p in project_paths):
+                        candidates.append((mtime, subdir.name, transcript))
+                        seen_sessions.add(subdir.name)
+            except OSError:
+                continue
 
     candidates.sort(key=lambda c: c[0], reverse=True)
     return candidates
@@ -118,18 +126,15 @@ def get_current_session(
             # Look up transcript path if possible
             tpath = None
             if harness == "antigravity":
-                candidate = (
-                    Path.home()
-                    / ".gemini"
-                    / "antigravity-ide"
-                    / "brain"
-                    / sid
-                    / ".system_generated"
-                    / "logs"
-                    / "transcript.jsonl"
-                )
-                if candidate.exists():
-                    tpath = candidate
+                for bdir in [
+                    Path.home() / ".gemini" / "antigravity" / "brain",
+                    Path.home() / ".gemini" / "antigravity-ide" / "brain",
+                    Path.home() / ".gemini" / "antigravity-cli" / "brain",
+                ]:
+                    candidate = bdir / sid / ".system_generated" / "logs" / "transcript.jsonl"
+                    if candidate.exists():
+                        tpath = candidate
+                        break
             else:
                 matches = list((Path.home() / ".claude" / "projects").glob(f"*/{sid}.jsonl"))
                 if matches:

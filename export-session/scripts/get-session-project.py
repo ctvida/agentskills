@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def get_claude_session_project(session_id: str) -> str:
-    """Get the project path from a Claude session's history entry."""
+    """Get the project path from a Claude session'''s history entry."""
     history_file = Path.home() / ".claude" / "history.jsonl"
 
     if not history_file.exists():
@@ -36,40 +36,64 @@ def get_claude_session_project(session_id: str) -> str:
 
 
 def get_agy_session_project(session_id: str) -> str:
-    """Get the project path from an Antigravity IDE transcript."""
-    transcript = (
-        Path.home()
-        / ".gemini"
-        / "antigravity-ide"
-        / "brain"
-        / session_id
-        / ".system_generated"
-        / "logs"
-        / "transcript.jsonl"
-    )
-    if not transcript.exists():
+    """Get the project path from an Antigravity transcript."""
+    transcript = None
+    for bdir in [
+        Path.home() / ".gemini" / "antigravity" / "brain",
+        Path.home() / ".gemini" / "antigravity-ide" / "brain",
+        Path.home() / ".gemini" / "antigravity-cli" / "brain",
+    ]:
+        cand = bdir / session_id / ".system_generated" / "logs" / "transcript.jsonl"
+        if cand.is_file():
+            transcript = cand
+            break
+
+    if not transcript:
         return ""
 
     try:
         with open(transcript, "r", errors="ignore") as f:
-            for _ in range(30):
+            for _ in range(50):
                 line = f.readline()
                 if not line:
                     break
+
+                # 1. Check Active Document in prompt metadata
                 m = re.search(r"Active Document:\s*([^\s(]+)", line)
                 if m:
-                    doc_path = Path(m.group(1))
+                    doc_path = Path(m.group(1).strip('"\' '))
                     for parent in [doc_path] + list(doc_path.parents):
                         if (parent / ".git").exists():
                             return str(parent)
-                m = re.search(
-                    r'["\']?(?:Cwd|DirectoryPath)["\']?\s*:\s*["\']([^"\']+)["\']', line
-                )
+
+                # 2. Check active workspaces metadata
+                m = re.search(r"(/Users/[^\s/]+/Documents/repos/[^\s/]+)", line)
                 if m:
                     p = Path(m.group(1))
                     for parent in [p] + list(p.parents):
                         if (parent / ".git").exists():
                             return str(parent)
+
+                # 3. Check JSON tool calls
+                try:
+                    data = json.loads(line)
+                    for tc in data.get("tool_calls") or []:
+                        args = tc.get("args") or {}
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except Exception:
+                                pass
+                        if isinstance(args, dict):
+                            for k in ("Cwd", "DirectoryPath", "SearchDirectory", "TargetFile", "AbsolutePath"):
+                                val = args.get(k)
+                                if val and isinstance(val, str):
+                                    p = Path(val.strip('"\' '))
+                                    for parent in [p] + list(p.parents):
+                                        if (parent / ".git").exists():
+                                            return str(parent)
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -77,7 +101,7 @@ def get_agy_session_project(session_id: str) -> str:
 
 
 def get_session_project(session_id: str) -> str:
-    # Try Claude first, then Antigravity IDE
+    # Try Claude first, then Antigravity
     if proj := get_claude_session_project(session_id):
         return proj
     return get_agy_session_project(session_id)
