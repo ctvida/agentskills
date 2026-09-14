@@ -20,6 +20,7 @@ SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 SESSION_ID=""
 USER_NOTE=""
 PROJECT_PATH=""
+MODEL=""
 FORCE_NEW=""
 CURRENT_DIR="$(pwd)"
 
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
       PROJECT_PATH="$2"
       shift 2
       ;;
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
     --new)
       FORCE_NEW="--new"
       shift
@@ -49,6 +54,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --session-id ID         Session ID to export (alternative to positional)"
       echo "  --note TEXT             Optional personal note/reminder for this export"
       echo "  --project PATH          Target project folder (relative to repo root)"
+      echo "  --model MODEL           Summarizer model (e.g. gemini-3.7, claude-p-haiku)"
       echo "  --new                   Write a new file instead of appending to an existing export"
       echo ""
       echo "By default, re-exporting a session that already has an export in the target"
@@ -184,6 +190,7 @@ python3 "$SCRIPT_DIR/session-exporter.py" \
   --output-dir "$OUTPUT_DIR" \
   --project-root "$PROJECT_PATH" \
   --user-note "$USER_NOTE" \
+  ${MODEL:+--model "$MODEL"} \
   ${FORCE_NEW:+"$FORCE_NEW"}
 
 python3 "$SCRIPT_DIR/sticky-dir.py" set "$SESSION_ID" "$OUTPUT_DIR" 2>/dev/null || true

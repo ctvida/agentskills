@@ -84,17 +84,34 @@ def detect_harness() -> str:
     return "unknown"
 
 
-def get_model() -> str:
+def get_model(cli_model: Optional[str] = None) -> str:
     """Determine which model to use for summarization."""
-    # 1. Explicit environment variable override
+    # 1. Explicit CLI argument
+    if cli_model:
+        return cli_model
+
+    # 2. Explicit environment variable override
     if env_model := os.getenv("CLAUDE_EXPORT_MODEL"):
         return env_model
 
+    # 3. Prefer Gemini 3.7 Flash via agy CLI if available (fast, 1M context, saves Claude quota)
+    try:
+        subprocess.run(["agy", "--version"], capture_output=True, check=True, timeout=2)
+        return "gemini-3.7-flash-medium"
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
     harness = detect_harness()
 
-    # 2. If in Claude Code or Antigravity, use subscription (lowest reasoning model = Haiku)
-    if harness in ("claude-code", "antigravity"):
+    # 4. If in Claude Code or claude is available, use subscription (Haiku)
+    if harness == "claude-code":
         return "claude-p-haiku"
+
+    try:
+        subprocess.run(["claude", "--version"], capture_output=True, check=True, timeout=2)
+        return "claude-p-haiku"
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        pass
 
     # 3. If not in Claude Code, check what's available and prompt user
     print(f"\nDetected harness: {harness}", file=sys.stderr)
@@ -380,6 +397,20 @@ TAGS: [tag1, tag2, tag3, ...]"""
                     text=True,
                     timeout=60
                 )
+            elif model.startswith("gemini") or model.startswith("agy://") or model.startswith("gemini://"):
+                model_name = model
+                if "://" in model:
+                    model_name = model.split("://")[1]
+                if model_name in ("gemini-3.7", "gemini"):
+                    model_name = "gemini-3.7-flash-medium"
+                elif model_name == "gemini-3.8":
+                    model_name = "gemini-3.8-flash-medium"
+                result = subprocess.run(
+                    ["agy", "--model", model_name, "-p", prompt],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
             elif model.startswith("mlx://"):
                 model_name = model.split("://")[1]
                 result = subprocess.run(
@@ -412,11 +443,13 @@ TAGS: [tag1, tag2, tag3, ...]"""
             summary = ""
             tags = []
             for line in output.split("\n"):
-                if line.startswith("SUMMARY:"):
-                    summary = line.replace("SUMMARY:", "").strip()
-                elif line.startswith("TAGS:"):
-                    tags_str = line.replace("TAGS:", "").strip()
-                    tags = [t.strip() for t in tags_str.split(",") if t.strip()]
+                line_clean = line.strip()
+                line_clean = re.sub(r"^[\*\-\s]*", "", line_clean)
+                if line_clean.upper().startswith("SUMMARY:"):
+                    summary = re.sub(r"^SUMMARY:\s*", "", line_clean, flags=re.IGNORECASE).strip().strip('"*')
+                elif line_clean.upper().startswith("TAGS:"):
+                    tags_str = re.sub(r"^TAGS:\s*", "", line_clean, flags=re.IGNORECASE).strip().strip("[]")
+                    tags = [t.strip().strip('"*\'') for t in tags_str.split(",") if t.strip()]
 
             if not summary or not tags:
                 raise RuntimeError(f"no SUMMARY/TAGS lines in output: {output[:300]!r}")
@@ -563,6 +596,7 @@ def main():
     parser = argparse.ArgumentParser(description="Export Claude/Antigravity sessions to markdown")
     parser.add_argument("--session-id", required=True, help="Session ID to export")
     parser.add_argument("--transcript", default="", help="Optional explicit path to transcript file")
+    parser.add_argument("--model", default="", help="Summarizer model (e.g. gemini-3.7, claude-p-haiku)")
     parser.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_argument("--user-note", default="", help="Optional user note")
     parser.add_argument("--project-root", default="",
@@ -574,7 +608,7 @@ def main():
 
     try:
         # Get model
-        model = get_model()
+        model = get_model(cli_model=args.model)
 
         # Retrieve session context
         print(f"Retrieving session {args.session_id}...", file=sys.stderr)

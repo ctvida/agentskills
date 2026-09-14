@@ -38,12 +38,19 @@ agent's context on every invocation.
 
 ## Model selection
 
-The skill picks the cheapest available option and needs no configuration in
-Claude Code, where it uses `claude -p` with Haiku. Elsewhere it tries, in
-order: `CLAUDE_EXPORT_MODEL` if set, then MLX/omlx, then Ollama, then
-OpenRouter if `OPENROUTER_API_KEY` is set, then `claude -p`.
+The skill picks the fastest, cheapest available option. If `agy` CLI is available,
+it defaults to Gemini 3.7 Flash (`gemini-3.7-flash-medium`), which provides a 1M token
+context window and avoids burning Claude subscription limits. In Claude Code without `agy`,
+it falls back to `claude -p` (Haiku).
+
+Override per-command via `--model` or globally via `CLAUDE_EXPORT_MODEL`:
 
 ```bash
+export-session --model gemini-3.7
+export-session --model claude-p-haiku
+
+export CLAUDE_EXPORT_MODEL="gemini-3.7-flash-medium"
+export CLAUDE_EXPORT_MODEL="claude-p-haiku"
 export CLAUDE_EXPORT_MODEL="omlx://hermes-2-pro-mistral"
 export CLAUDE_EXPORT_MODEL="ollama://mistral"
 export CLAUDE_EXPORT_MODEL="openrouter://meta-llama/llama-2-7b-chat:free"
