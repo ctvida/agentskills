@@ -238,18 +238,21 @@ If not in a git repo, defaults to `~/.workbench/sessions/`.
 ## Edge cases
 
 - **Current-session detection** (`scripts/get-session-id.py`, first hit wins):
-  1. Harness session-id env var (`CLAUDE_SESSION_ID`, `CLAUDE_CODE_SESSION_ID`, `SESSION_ID`).
+  1. Harness session-id env var (`CLAUDE_SESSION_ID`, `CLAUDE_CODE_SESSION_ID`, `SESSION_ID`, `ANTIGRAVITY_CONVERSATION_ID`).
+  1.5. Antigravity IDE sessions in `~/.gemini/antigravity-ide/brain/<session-id>/.system_generated/logs/transcript.jsonl`.
+       Scoped to the current repo/project. If newer than any Claude Code session (or if no Claude session exists),
+       this rule matches. Applies the same 300s ambiguity window; `--path` / `--transcript` exposes the full transcript file.
   2. Newest `*.jsonl` in `~/.claude/projects/<cwd with / and . replaced by ->/`.
      Scoped to the current repo — the global `~/.claude/history.jsonl` is never
      used, since it returns whichever open window wrote last.
-  3. If several sessions in that dir were modified within 5 minutes, it prints
+  3. If several sessions in that dir were modified within 5 minutes (300s), it prints
      the candidates with mtimes and exits 2 — pass an explicit session ID.
-  Add `--debug` to print which rule matched.
+  Add `--debug` to print which rule matched, `--path` to get the transcript path, or `--json` for structured metadata.
 - **No active session**: Prompts for session ID
-- **Session not found**: Explains error and suggests checking `claude --resume`
+- **Session not found**: Explains error and suggests checking `claude --resume` (Claude Code) or `~/.gemini/antigravity-ide/brain/` (Antigravity IDE)
 - **Outside git repo**: Defaults to `~/.workbench/sessions/`
 - **Permission issues**: Notifies user, suggests checking directory permissions
-- **Past session not in history**: Confirms session ID is valid (check `~/.claude/history.jsonl`)
+- **Past session not in history**: Confirms session ID is valid (check `~/.claude/history.jsonl` or `~/.gemini/antigravity-ide/brain/`)
 - **MLX/omlx not found**: Falls back to next available model in priority order
 
 ## Example output
@@ -268,4 +271,4 @@ Note: Test this against Q3 earnings data
 - Exports preserve the full conversation verbatim (no editing or summarization of responses)
 - Auto-generated tags are semantic, not action-oriented (e.g., `[architecture, debugging]` not `[todo, wip]`)
 - Files are immutable once created; create a new export to store updated notes
-- Session IDs can be found in `~/.claude/history.jsonl` or via `claude --resume` interactive list
+- Session IDs can be found in `~/.claude/history.jsonl`, via `claude --resume` interactive list, or in `~/.gemini/antigravity-ide/brain/`
