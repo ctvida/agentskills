@@ -240,18 +240,19 @@ def get_session_turns(session_id: str, transcript_path: str = "") -> list[str]:
         else:
             raise FileNotFoundError(f"Specified transcript file not found: {transcript_path}")
     else:
-        # 1. Check Antigravity IDE brain
-        agy_candidate = (
-            Path.home()
-            / ".gemini"
-            / "antigravity-ide"
-            / "brain"
-            / session_id
-            / ".system_generated"
-            / "logs"
-            / "transcript.jsonl"
-        )
-        if agy_candidate.is_file():
+        # 1. Check Antigravity brain directories
+        brain_dirs = [
+            Path.home() / ".gemini" / "antigravity" / "brain",
+            Path.home() / ".gemini" / "antigravity-ide" / "brain",
+            Path.home() / ".gemini" / "antigravity-cli" / "brain",
+        ]
+        agy_candidate = None
+        for bdir in brain_dirs:
+            cand = bdir / session_id / ".system_generated" / "logs" / "transcript.jsonl"
+            if cand.is_file():
+                agy_candidate = cand
+                break
+        if agy_candidate:
             path = agy_candidate
         else:
             # 2. Check Claude Code projects
@@ -558,7 +559,7 @@ def load_redactions(path: Path = None) -> list[str]:
 
     The terms live OUTSIDE this script on purpose. An export lands in a tracked
     directory, so anything the operator will not have in a repo must not be in
-    the exporter either — this skill is itself synced across machines and tools.
+    the exporter either - this skill is itself synced across machines and tools.
     Missing file means no redaction, which is the right default for anyone who
     has not opted in.
     """
@@ -638,7 +639,7 @@ def main():
                 print(f"Redaction: {len(terms)} term(s) from {REDACT_FILE}, "
                       f"{hits} occurrence(s) replaced", file=sys.stderr)
             else:
-                print(f"Redaction: no term list at {REDACT_FILE} — nothing scrubbed",
+                print(f"Redaction: no term list at {REDACT_FILE} - nothing scrubbed",
                       file=sys.stderr)
 
             now = datetime.now()
@@ -683,7 +684,7 @@ def main():
             print(f"Redaction: {len(terms)} term(s) from {REDACT_FILE}, "
                   f"{hits} occurrence(s) replaced", file=sys.stderr)
         else:
-            print(f"Redaction: no term list at {REDACT_FILE} — nothing scrubbed",
+            print(f"Redaction: no term list at {REDACT_FILE} - nothing scrubbed",
                   file=sys.stderr)
 
         # Write to file
