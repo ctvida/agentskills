@@ -72,9 +72,11 @@ done
 if [[ -z "$SESSION_ID" ]]; then
   if [[ -n "${CLAUDE_SESSION_ID:-}" ]]; then
     SESSION_ID="$CLAUDE_SESSION_ID"
+  elif [[ -n "${ANTIGRAVITY_CONVERSATION_ID:-}" ]]; then
+    SESSION_ID="$ANTIGRAVITY_CONVERSATION_ID"
   else
     echo "No session ID provided. Getting current session..."
-    # Try to extract from claude context if available
+    # Try to extract from claude or antigravity context if available
     SESSION_ID=$(python3 "$SCRIPT_DIR/get-session-id.py" 2>/dev/null || echo "")
 
     if [[ -z "$SESSION_ID" ]]; then
@@ -82,8 +84,9 @@ if [[ -z "$SESSION_ID" ]]; then
       echo "  export-session <session-id>"
       echo ""
       echo "Find session IDs via:"
-      echo "  claude --resume    # Interactive list"
+      echo "  claude --resume                                    # Interactive list (Claude Code)"
       echo "  grep sessionId ~/.claude/history.jsonl | head -20"
+      echo "  ls -lt ~/.gemini/antigravity-ide/brain/ | head -20 # Antigravity IDE"
       exit 1
     fi
   fi

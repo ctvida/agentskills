@@ -63,6 +63,10 @@ def detect_harness() -> str:
     if os.getenv("CLAUDE_SESSION_ID"):
         return "claude-code"
 
+    # Check for Antigravity IDE
+    if os.getenv("ANTIGRAVITY_AGENT") or os.getenv("ANTIGRAVITY_CONVERSATION_ID"):
+        return "antigravity"
+
     try:
         subprocess.run(["claude", "--version"], capture_output=True, check=True, timeout=2)
         return "claude-code"
@@ -88,8 +92,8 @@ def get_model() -> str:
 
     harness = detect_harness()
 
-    # 2. If in Claude Code, use subscription (lowest reasoning model = Haiku)
-    if harness == "claude-code":
+    # 2. If in Claude Code or Antigravity, use subscription (lowest reasoning model = Haiku)
+    if harness in ("claude-code", "antigravity"):
         return "claude-p-haiku"
 
     # 3. If not in Claude Code, check what's available and prompt user
@@ -125,21 +129,49 @@ def get_model() -> str:
     return "claude-p-haiku"
 
 
-def get_session_turns(session_id: str) -> list[str]:
-    """
-    Reconstruct the conversation from Claude Code's on-disk JSONL transcript
-    (~/.claude/projects/<slugified-cwd>/<session_id>.jsonl), one rendered
-    markdown block per turn. Works the same way for the current session and
-    past sessions - the transcript is the only complete record of either.
-    """
-    matches = list((Path.home() / ".claude" / "projects").glob(f"*/{session_id}.jsonl"))
-    if not matches:
-        raise FileNotFoundError(f"No transcript found for session {session_id}")
-
+def parse_agy_transcript(path: Path, session_id: str) -> list[str]:
+    """Reconstruct conversation from Antigravity IDE JSONL transcript."""
     turns = []
-    skip_next_assistant = False  # True when the previous user turn was a meta-command
-    skip_next_output = False  # True when the previous user turn was a meta-command's <command-name> block
-    with open(matches[0], "r") as f:
+    skip_next_assistant = False
+    with open(path, "r", errors="ignore") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            etype = entry.get("type")
+            if etype == "USER_INPUT":
+                content = entry.get("content")
+                if not isinstance(content, str) or not content.strip():
+                    continue
+                m = re.search(r"<USER_REQUEST>(.*?)</USER_REQUEST>", content, re.DOTALL)
+                text = m.group(1).strip() if m else content.strip()
+                if is_ai_meta_command(text):
+                    skip_next_assistant = True
+                    continue
+                skip_next_assistant = False
+                turns.append(f"**User:**\n\n{text}\n")
+            elif etype == "PLANNER_RESPONSE":
+                if skip_next_assistant:
+                    continue
+                content = entry.get("content")
+                if isinstance(content, str) and content.strip():
+                    turns.append(f"**Assistant:**\n\n{content.strip()}\n")
+
+    if not turns:
+        raise ValueError(f"No conversation content found for session {session_id}")
+    return turns
+
+
+def parse_claude_transcript(path: Path, session_id: str) -> list[str]:
+    """Reconstruct conversation from Claude Code JSONL transcript."""
+    turns = []
+    skip_next_assistant = False
+    skip_next_output = False
+    with open(path, "r", errors="ignore") as f:
         for line in f:
             if not line.strip():
                 continue
@@ -159,7 +191,6 @@ def get_session_turns(session_id: str) -> list[str]:
                     continue
                 skip_next_output = False
                 if is_ai_meta_command(content):
-                    # Skip this turn, its local-command-stdout, and the assistant reply that follows
                     skip_next_assistant = True
                     skip_next_output = True
                     continue
@@ -175,8 +206,62 @@ def get_session_turns(session_id: str) -> list[str]:
 
     if not turns:
         raise ValueError(f"No conversation content found for session {session_id}")
-
     return turns
+
+
+def get_session_turns(session_id: str, transcript_path: str = "") -> list[str]:
+    """
+    Reconstruct the conversation from on-disk JSONL transcript,
+    one rendered markdown block per turn. Supports both Antigravity IDE
+    and Claude Code transcripts.
+    """
+    path = None
+    if transcript_path:
+        p = Path(transcript_path)
+        if p.is_file():
+            path = p
+        else:
+            raise FileNotFoundError(f"Specified transcript file not found: {transcript_path}")
+    else:
+        # 1. Check Antigravity IDE brain
+        agy_candidate = (
+            Path.home()
+            / ".gemini"
+            / "antigravity-ide"
+            / "brain"
+            / session_id
+            / ".system_generated"
+            / "logs"
+            / "transcript.jsonl"
+        )
+        if agy_candidate.is_file():
+            path = agy_candidate
+        else:
+            # 2. Check Claude Code projects
+            matches = list((Path.home() / ".claude" / "projects").glob(f"*/{session_id}.jsonl"))
+            if matches:
+                path = matches[0]
+            else:
+                raise FileNotFoundError(f"No transcript found for session {session_id}")
+
+    # Detect format
+    is_agy = "antigravity" in str(path) or "brain" in str(path)
+    if not is_agy:
+        try:
+            with open(path, "r", errors="ignore") as f:
+                for line in f:
+                    if line.strip():
+                        entry = json.loads(line)
+                        if entry.get("type") in ("USER_INPUT", "PLANNER_RESPONSE", "CONVERSATION_HISTORY") or "source" in entry:
+                            is_agy = True
+                        break
+        except Exception:
+            pass
+
+    if is_agy:
+        return parse_agy_transcript(path, session_id)
+    else:
+        return parse_claude_transcript(path, session_id)
 
 
 # --- Appending to a previous export of the same session -------------------
@@ -290,6 +375,7 @@ TAGS: [tag1, tag2, tag3, ...]"""
                 # Use claude -p (subscription, no extra cost)
                 result = subprocess.run(
                     ["claude", "-p", prompt],
+                    input="",
                     capture_output=True,
                     text=True,
                     timeout=60
@@ -474,8 +560,9 @@ def redact(text: str, terms: list[str]) -> tuple[str, int]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Export Claude sessions to markdown")
+    parser = argparse.ArgumentParser(description="Export Claude/Antigravity sessions to markdown")
     parser.add_argument("--session-id", required=True, help="Session ID to export")
+    parser.add_argument("--transcript", default="", help="Optional explicit path to transcript file")
     parser.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_argument("--user-note", default="", help="Optional user note")
     parser.add_argument("--project-root", default="",
@@ -491,7 +578,7 @@ def main():
 
         # Retrieve session context
         print(f"Retrieving session {args.session_id}...", file=sys.stderr)
-        turns = get_session_turns(args.session_id)
+        turns = get_session_turns(args.session_id, transcript_path=args.transcript)
         conversation = "\n".join(turns)
 
         output_dir = Path(args.output_dir)
@@ -646,6 +733,25 @@ def selftest():
         raise AssertionError("summarizer returned a fallback instead of exiting")
     except SystemExit as e:
         assert e.code == 1, e.code
+
+    # Test Antigravity IDE transcript parsing
+    import tempfile
+    with tempfile.NamedTemporaryFile("w+", suffix=".jsonl") as tf:
+        tf.write(
+            json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "<USER_REQUEST>\nHow to test AGY?\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nsome metadata\n</ADDITIONAL_METADATA>"}) + "\n"
+            + json.dumps({"type": "PLANNER_RESPONSE", "source": "MODEL", "content": "You test it like this."}) + "\n"
+            + json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "/model haiku"}) + "\n"
+            + json.dumps({"type": "PLANNER_RESPONSE", "source": "MODEL", "content": "Switched model."}) + "\n"
+            + json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "Next real question"}) + "\n"
+            + json.dumps({"type": "PLANNER_RESPONSE", "source": "MODEL", "content": "Next real answer"}) + "\n"
+        )
+        tf.flush()
+        agy_turns = parse_agy_transcript(Path(tf.name), "test-session")
+        assert len(agy_turns) == 4, f"Expected 4 turns, got {len(agy_turns)}"
+        assert agy_turns[0] == "**User:**\n\nHow to test AGY?\n", agy_turns[0]
+        assert agy_turns[1] == "**Assistant:**\n\nYou test it like this.\n", agy_turns[1]
+        assert agy_turns[2] == "**User:**\n\nNext real question\n", agy_turns[2]
+        assert agy_turns[3] == "**Assistant:**\n\nNext real answer\n", agy_turns[3]
 
     print("selftest ok")
 
