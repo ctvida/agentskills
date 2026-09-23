@@ -105,6 +105,25 @@ step is that rule misapplied.
 Keep it to a paragraph the operator can read in a card. Findings, blockers, and
 the plan itself belong in the project file's body, not in the field.
 
+### Operator next steps: a separate section, never inside the resume point
+
+`next_action` is for the next agent. What only the operator can do lives in a
+`## Operator next steps` section in the body of the same `_index.md`, and
+nowhere else: not in `next_action`, not in gate files, not in a plan's
+checkboxes. The cockpit's queue reads that section for every unit
+(`stack.py: operator_steps()`). Its checkbox removes the step, ticks every
+gate item the step names on a `Gate:` line, and logs a win.
+
+- One list item per step: a **bold name**, then indented lines for where,
+  done-when, and `Gate: <label>` when finishing the step clears a gate item. Only steps the operator can take now; a step waiting on agent work
+  is added when that work lands. "None." when there are none.
+- Rewrite it whenever you rewrite `next_action`, and drop anything the operator
+  has deferred. A deferred step that only matters at one moment belongs to that
+  moment: the code refuses there and says what to do (marketing-engine's approve
+  refuses a cold email while the postal address is a placeholder), and it is
+  not repeated as a standing to-do.
+- A gate states what must be true. It carries no instructions for the operator.
+
 ### Procedure
 
 1. **Find the destination.** Use the file or frontmatter field named by this
