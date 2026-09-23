@@ -111,10 +111,11 @@ the plan itself belong in the project file's body, not in the field.
 `## Operator next steps` section in the body of the same `_index.md`, and
 nowhere else: not in `next_action`, not in gate files, not in a plan's
 checkboxes. The cockpit's queue reads that section for every unit
-(`stack.py: operator_steps()`), and its DONE button removes the step.
+(`stack.py: operator_steps()`). Its checkbox removes the step, ticks every
+gate item the step names on a `Gate:` line, and logs a win.
 
-- One list item per step: a **bold name**, then indented lines for where and
-  done-when. Only steps the operator can take now; a step waiting on agent work
+- One list item per step: a **bold name**, then indented lines for where,
+  done-when, and `Gate: <label>` when finishing the step clears a gate item. Only steps the operator can take now; a step waiting on agent work
   is added when that work lands. "None." when there are none.
 - Rewrite it whenever you rewrite `next_action`, and drop anything the operator
   has deferred. A deferred step that only matters at one moment belongs to that
