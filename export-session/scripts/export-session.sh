@@ -47,8 +47,11 @@ while [[ $# -gt 0 ]]; do
       FORCE_NEW="--new"
       shift
       ;;
+    --no-verify|--verified)
+      shift
+      ;;
     --help)
-      echo "Usage: export-session [SESSION_ID] [--note 'note'] [--project path] [--new]"
+      echo "Usage: export-session [SESSION_ID] [--note 'note'] [--project path] [--new] [--no-verify]"
       echo ""
       echo "  SESSION_ID              Optional session ID to export (positional or --session-id flag)"
       echo "  --session-id ID         Session ID to export (alternative to positional)"
@@ -56,6 +59,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --project PATH          Target project folder (relative to repo root)"
       echo "  --model MODEL           Summarizer model (e.g. gemini-3.7, claude-p-haiku)"
       echo "  --new                   Write a new file instead of appending to an existing export"
+      echo "  --no-verify             Bypass pre-flight verification gate"
+      echo "  --verified              Mark pre-flight resume point as verified"
       echo ""
       echo "By default, re-exporting a session that already has an export in the target"
       echo "folder appends only the turns added since that export."
