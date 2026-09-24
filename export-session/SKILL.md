@@ -1,12 +1,37 @@
 ---
 name: export-session
-description: Export Claude conversations to searchable markdown with auto-generated summaries and tags. Use this whenever you want to save a valuable conversation for later reference—either the current session or a past session by ID. Works globally across projects. No manual tagging required; Claude generates semantic tags and a concise summary automatically. Optionally add a personal note or reminder. Output goes to <repo-root>/.workbench/sessions/ organized by semantic tags.
-compatibility: Requires claude CLI (Claude Code) or local inference (Ollama/MLX) or OpenRouter API key. Haiku or equivalent small model recommended.
+description: Export agent conversations to searchable markdown with auto-generated summaries and tags. MANDATORY PRE-FLIGHT: Next action is always written (driven by Objective) and verified with the operator before running the export script, unless the operator explicitly stated in the prompt that no verification is needed. Output goes to <repo-root>/.workbench/sessions/ organized by semantic tags.
+compatibility: Requires claude CLI (Claude Code), agy CLI (Antigravity), or local inference (Ollama/MLX), or OpenRouter API key. Haiku or equivalent small model recommended.
 ---
 
 # export-session
 
-## Run it
+## MANDATORY PRE-FLIGHT GATE: Resume Point & Verification
+
+**STOP. DO NOT call `scripts/export-session.sh` in the first turn.**
+
+When the operator invokes `/export-session`:
+
+1. **Next action is always written unless there is no legitimate next action.**
+   - If the project's objective was completely met (every done-when item settled by a command or file), propose completion to the operator.
+   - Otherwise, a resume point MUST be written.
+2. **Next action is driven by Objective.**
+   - Derive `next_action` directly from `objective.md` or the standing project goal, not just the micro-task touched last.
+   - Follow the required four-part shape: Objective, Plan (a pointer), Standing instruction, Done-when.
+3. **Verification with the operator:**
+   - **Unless stated by the operator in the prompt that no verification is needed** (e.g., "no verification needed", "--no-verify", "just export"):
+     - You MUST pause tool execution immediately.
+     - Present the draft of `next_action` and `## Operator next steps` in your response.
+     - Ask the operator to confirm or edit.
+     - **DO NOT run `scripts/export-session.sh` until the operator confirms.**
+   - **If the operator explicitly stated in the prompt that no verification is needed**:
+     - Write the resume point to the repo file (`_index.md`) and proceed directly to running `scripts/export-session.sh`.
+
+## Run it (Only After Gate Is Cleared)
+
+Run `scripts/export-session.sh` ONLY AFTER:
+- The operator confirms the resume point draft, OR
+- The operator explicitly bypassed verification in their prompt.
 
 ```bash
 scripts/export-session.sh                       # current session
@@ -16,19 +41,15 @@ scripts/export-session.sh --project <path>      # skip the project prompt
 scripts/export-session.sh --new                 # force a separate file
 ```
 
-That script is the whole interface. It resolves the session, generates the
+That script is the export interface. It resolves the session, generates the
 summary and tags, redacts, and writes the file. Do not reimplement any of that
-here; run it and report what it prints.
-
-**First, though: [write the resume point](#before-exporting-write-the-resume-point).**
-It goes in a repo file and has to be confirmed by the operator, so it cannot be
-done after the export.
+here; run it only after the pre-flight gate is cleared and report what it prints.
 
 Setup, model configuration and troubleshooting are in `README.md`, not here.
 
 ## What it does
 
-Export conversations from Claude Code (or other Claude harnesses) to markdown with auto-generated summaries and semantic tags.
+Export conversations from Claude Code, Antigravity, or other harnesses to markdown with auto-generated summaries and semantic tags.
 
 ## When to use
 
@@ -37,68 +58,60 @@ Export conversations from Claude Code (or other Claude harnesses) to markdown wi
 - Minimize digital clutter by only exporting sessions worth keeping
 - Access past conversations without resuming the full session
 
-## Before exporting: write the resume point
+## Resume point requirements
 
 A session that ends with unfinished work leaves a resume point, so the next
 session does not re-derive what this one already knew. Do this **before**
 running the export.
 
-**Only when there is something to resume.** If the work is done — shipped,
-verified, nothing blocked, no open question — write no resume point and say so
-in one line. A next action invented for a finished session is worse than none:
-it reads as real to the next session and to any view that surfaces it. Ask
-"what would a fresh session be stuck on?", not "what could be done next" —
-there is always something that could be done next.
+**Next action is always written unless there is no legitimate next action.**
+If the work is genuinely done (shipped, verified, nothing blocked, no open question),
+write no resume point and propose completion. Ask: "what would a fresh session
+be stuck on?", not "what could be done next" -- there is always something that
+could be done next.
 
 ### Finished work gets closed, not left blank
 
 Silence is not disposition. A project whose objective was met still renders as
-open, and whatever else infers next actions will eventually write it a new one
-— so the session that met the objective is the one that has to say so.
+open, and whatever else infers next actions will eventually write it a new one,
+so the session that met the objective is the one that has to say so.
 
 Check the objective this session was working to (the existing resume point) and
 its done-when, item by item, against what actually happened. If every item is
 settled by a command or a file:
 
-1. Say which done-when items are met and what settles each — a command's
+1. Say which done-when items are met and what settles each -- a command's
    output, a path, a commit. Evidence, not assertion.
 2. **Propose completion and wait.** The operator confirms or names what is
    still open. Never conclude a project silently.
 3. On confirmation, record it through whatever mechanism this repo's
-   `CLAUDE.md` names for completion, which also clears the resume point. If it
+   governance names for completion, which also clears the resume point. If it
    names none, say the objective is met and leave the record alone.
 
-Completion recorded this way is a **proposal that stops the work generating
-more work**, not an archive. Archiving, un-tracking, or moving anything stays
+Completion recorded this way is a proposal that stops the work generating
+more work, not an archive. Archiving, un-tracking, or moving anything stays
 the operator's, through their own review.
 
 If any done-when item is unsettled, this section does not apply: write the
 resume point as below, scoped to what is left.
 
-### Write an objective, not a task
+### Next action is driven by Objective
 
 A resume point naming one step makes the operator the runtime: the next session
 does that step, stops, and comes back for instructions. Over a week that is
 constant babysitting, which is the opposite of the target state. Write what a
-manager hands a capable report — the goal, how you'll know it's met, and the
-authority to keep going — not a ticket.
+manager hands a capable report: the goal, how you will know it is met, and the
+authority to keep going, not a ticket. Derive it directly from `objective.md` or
+the standing project goal.
 
 The resume point has four parts, in this order:
 
-1. **Objective** — the outcome, and why it matters. Not "run X", but what is
-   true when X has been run and everything it implies is done.
-2. **Plan** — the ordered steps that get there, in the project file. The
-   resume point points at them; it does not inline them.
-3. **Standing instruction** — explicit permission to continue: work the plan
-   top to bottom in one pass, do not stop after step 1, commit per step, and
-   if a step blocks, record the blocker in the project file and continue with
-   the next independent step.
-4. **Done-when** — a short checkable list. Each item is something a command or
-   a file can settle, not a feeling. This is the stop condition; without it,
-   "continue until done" has no end and the agent either quits early or runs
-   forever.
+1. **Objective**: the outcome, and why it matters. Driven by the project objective, not a micro-task. Not "run X", but what is true when X has been run and everything it implies is done.
+2. **Plan**: the ordered steps that get there, in the project file. The resume point points at them; it does not inline them.
+3. **Standing instruction**: explicit permission to continue: work the plan top to bottom in one pass, do not stop after step 1, commit per step, and if a step blocks, record the blocker in the project file and continue with the next independent step.
+4. **Done-when**: a short checkable list. Each item is something a command or a file can settle, not a feeling. This is the stop condition; without it, "continue until done" has no end and the agent either quits early or runs forever.
 
-The smallest-first-action rule governs *starting*, never *scope*: name an easy
+The smallest-first-action rule governs starting, never scope: name an easy
 entry point, then state the whole objective. A resume point scaled down to one
 step is that rule misapplied.
 
@@ -119,21 +132,15 @@ gate item the step names on a `Gate:` line, and logs a win.
   is added when that work lands. "None." when there are none.
 - Rewrite it whenever you rewrite `next_action`, and drop anything the operator
   has deferred. A deferred step that only matters at one moment belongs to that
-  moment: the code refuses there and says what to do (marketing-engine's approve
-  refuses a cold email while the postal address is a placeholder), and it is
-  not repeated as a standing to-do.
+  moment: the code refuses there and says what to do, and it is not repeated as a standing to-do.
 - A gate states what must be true. It carries no instructions for the operator.
 
 ### Procedure
 
-1. **Find the destination.** Use the file or frontmatter field named by this
-   repo's `CLAUDE.md`. If it names none, use `ops/next-session-prompt.md`.
-2. **Draft the objective** in the four-part shape above. Put the plan,
-   the findings this session produced, and any open question a fresh session
-   would otherwise re-derive into the project file's body — the resume point
-   itself is a snapshot, so rewrite in place; never append.
-3. **Show the draft and wait for confirmation** before writing. The operator
-   edits or accepts. Never write it silently.
+1. **Find the destination.** Use the file or frontmatter field named by this repo's `CLAUDE.md` or `AGENTS.md`. In repos with `_index.md`, write to frontmatter `next_action`. If it names none, use `ops/next-session-prompt.md`.
+2. **Draft the objective** in the four-part shape above, driven directly by `objective.md`. Put operator-only steps in `## Operator next steps` in the body.
+3. **Verify with the operator unless waived.** Show the draft of `next_action` and `## Operator next steps` and wait for confirmation before writing, unless the operator explicitly stated in their prompt that no verification is needed. Never write it silently without that explicit waiver.
+4. **Export.** After operator confirmation (or explicit waiver), write the resume point to the repo file, commit if working on a branch, and run `scripts/export-session.sh`.
 
 ## Re-exporting a session you continued
 
@@ -164,7 +171,7 @@ falls back to the computed destination rather than failing the export.
 
 ## What gets exported
 
-- **Full conversation**: All prompts and responses from the session (excluding AI meta-commands — see below)
+- **Full conversation**: All prompts and responses from the session (excluding AI meta-commands: see below)
 - **Auto-generated summary**: One sentence, max 60 characters (e.g., "Fundamental analysis backtesting strategy")
 - **Semantic tags**: 3-5 tags inferred from content (e.g., `[trading, backtesting, strategy, learning]`)
 - **Metadata frontmatter**: Date, session ID, project path, optional user note, model used
@@ -189,8 +196,8 @@ These turns add no value to the exported record and are stripped before writing 
 ### Redaction (protected terms)
 
 Exports are **verbatim**, and they land in a tracked directory. Anything that
-surfaced in the conversation — including content imported into context from
-personal files like `~/.agents/SOUL.md` — would otherwise be committed.
+surfaced in the conversation (including content imported into context from
+personal files like `~/.agents/SOUL.md`) would otherwise be committed.
 
 Before the file is written, every term in `~/.agents/redact-terms.txt` is
 replaced with `[REDACTED]`. One term per line, `#` comments ignored; matching is
@@ -200,7 +207,7 @@ term first. Override the path with `EXPORT_SESSION_REDACT_FILE`.
 **The terms deliberately do not live in this skill.** This skill is synced
 across machines and tools by skillshare, so a name hardcoded here would leak
 exactly where the rule is trying to prevent. If the file is absent, nothing is
-redacted — the right default for anyone who has not opted in — and the run says
+redacted (the right default for anyone who has not opted in) and the run says
 so on stderr.
 
 Scrubbing happens *before* the write, never as a fix-up afterwards: a file that
@@ -262,10 +269,10 @@ If not in a git repo, defaults to `~/.workbench/sessions/`.
        Scoped to the current repo/project. If newer than any Claude Code session (or if no Claude session exists),
        this rule matches. Applies the same 300s ambiguity window; `--path` / `--transcript` exposes the full transcript file.
   2. Newest `*.jsonl` in `~/.claude/projects/<cwd with / and . replaced by ->/`.
-     Scoped to the current repo — the global `~/.claude/history.jsonl` is never
+     Scoped to the current repo: the global `~/.claude/history.jsonl` is never
      used, since it returns whichever open window wrote last.
   3. If several sessions in that dir were modified within 5 minutes (300s), it prints
-     the candidates with mtimes and exits 2 — pass an explicit session ID.
+     the candidates with mtimes and exits 2: pass an explicit session ID.
   Add `--debug` to print which rule matched, `--path` to get the transcript path, or `--json` for structured metadata.
 - **No active session**: Prompts for session ID
 - **Session not found**: Explains error and suggests checking `claude --resume` (Claude Code) or `~/.gemini/antigravity-ide/brain/` (Antigravity IDE)
