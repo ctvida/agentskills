@@ -1,6 +1,11 @@
 ---
 name: export-session
-description: Export agent conversations to searchable markdown with auto-generated summaries and tags. MANDATORY PRE-FLIGHT: Next action is always written (driven by Objective) and verified with the operator before running the export script, unless the operator explicitly stated in the prompt that no verification is needed. Output goes to <repo-root>/.workbench/sessions/ organized by semantic tags.
+description: >-
+  Export agent conversations to searchable markdown with auto-generated summaries and tags.
+  MANDATORY PRE-FLIGHT: Next action is always written (driven by Objective) and verified
+  with the operator before running the export script, unless the operator explicitly stated
+  in the prompt that no verification is needed. Output goes to <repo-root>/.workbench/sessions/
+  organized by semantic tags.
 compatibility: Requires claude CLI (Claude Code), agy CLI (Antigravity), or local inference (Ollama/MLX), or OpenRouter API key. Haiku or equivalent small model recommended.
 ---
 
