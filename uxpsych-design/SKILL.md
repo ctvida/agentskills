@@ -1,6 +1,13 @@
 ---
 name: uxpsych-design
-description: Apply conversion psychology to UI/UX work — trust, friction, motivation, and layout rules grounded in cognitive science. Use this skill whenever building or reviewing any user-facing screen, landing page, onboarding flow, pricing page, paywall, checkout, form, empty state, or upgrade prompt — even if the user only asks for "a page" or "a form" and never mentions psychology or conversion. Complements aesthetic skills (frontend-design): that one decides how it looks; this one decides what converts.
+description: >-
+  Apply conversion psychology to UI/UX work: trust, friction, motivation, and layout
+  rules grounded in cognitive science. Use this skill whenever building or reviewing
+  any user-facing screen, landing page, onboarding flow, pricing page, paywall,
+  checkout, form, empty state, or upgrade prompt, even if the user only asks for
+  "a page" or "a form" and never mentions psychology or conversion. Complements
+  aesthetic skills (frontend-design): that one decides how it looks; this one decides
+  what converts.
 ---
 
 # UX Psychology Design
