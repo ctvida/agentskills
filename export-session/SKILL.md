@@ -32,11 +32,26 @@ When the operator invokes `/export-session`:
    - **If the operator explicitly stated in the prompt that no verification is needed**:
      - Write the resume point to the repo file (`_index.md`) and proceed directly to running `scripts/export-session.sh`.
 
-## Run it (Only After Gate Is Cleared)
+## Two steps, always both attempted
 
-Run `scripts/export-session.sh` ONLY AFTER:
-- The operator confirms the resume point draft, OR
-- The operator explicitly bypassed verification in their prompt.
+The skill does two independent jobs. Attempt both, in order, in every harness.
+A harness that cannot do one skips it and still does the other.
+
+1. **Resume point.** Write the confirmed `next_action` and `## Operator next
+   steps` to the repo file (see Procedure below). This is instructions plus a
+   file edit, so every harness that can write a file does it, whether or not
+   step 2 works.
+2. **Transcript export.** Run `scripts/export-session.sh`, ONLY AFTER the
+   operator confirms the resume point draft or explicitly bypassed
+   verification in their prompt.
+   - **Exit 3 means this harness left no transcript the exporter can read**
+     (no session id, or no parseable transcript file). Report
+     `Transcript skipped: <reason from stderr>` and stop. Do not retry, do not
+     hand-write a transcript, do not treat the skill as failed: step 1 stands.
+   - Any other non-zero exit is a real failure: report the output.
+
+Supported for step 2 today: Claude Code and Antigravity. Anything else, such as
+Pi, gets step 1 only.
 
 ```bash
 scripts/export-session.sh                       # current session
@@ -145,7 +160,8 @@ gate item the step names on a `Gate:` line, and logs a win.
 1. **Find the destination.** Use the file or frontmatter field named by this repo's `CLAUDE.md` or `AGENTS.md`. In repos with `_index.md`, write to frontmatter `next_action`. If it names none, use `ops/next-session-prompt.md`.
 2. **Draft the objective** in the four-part shape above, driven directly by `objective.md`. Put operator-only steps in `## Operator next steps` in the body.
 3. **Verify with the operator unless waived.** Show the draft of `next_action` and `## Operator next steps` and wait for confirmation before writing, unless the operator explicitly stated in their prompt that no verification is needed. Never write it silently without that explicit waiver.
-4. **Export.** After operator confirmation (or explicit waiver), write the resume point to the repo file, commit if working on a branch, and run `scripts/export-session.sh`.
+4. **Write it (step 1).** After operator confirmation (or explicit waiver), write the resume point to the repo file and commit if working on a branch.
+5. **Export (step 2).** Run `scripts/export-session.sh`. Exit 3 means skip, as described under "Two steps, always both attempted".
 
 ## Re-exporting a session you continued
 

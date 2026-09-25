@@ -593,6 +593,9 @@ def redact(text: str, terms: list[str]) -> tuple[str, int]:
     return text, hits
 
 
+EXIT_NO_TRANSCRIPT = 3
+
+
 def main():
     parser = argparse.ArgumentParser(description="Export Claude/Antigravity sessions to markdown")
     parser.add_argument("--session-id", required=True, help="Session ID to export")
@@ -613,7 +616,13 @@ def main():
 
         # Retrieve session context
         print(f"Retrieving session {args.session_id}...", file=sys.stderr)
-        turns = get_session_turns(args.session_id, transcript_path=args.transcript)
+        try:
+            turns = get_session_turns(args.session_id, transcript_path=args.transcript)
+        except FileNotFoundError as e:
+            # Exit 3 = this harness left no transcript we can parse. The skill
+            # skips the transcript step; the resume point already stands.
+            print(f"Transcript skipped: {e}", file=sys.stderr)
+            sys.exit(EXIT_NO_TRANSCRIPT)
         conversation = "\n".join(turns)
 
         output_dir = Path(args.output_dir)
@@ -787,6 +796,12 @@ def selftest():
         assert agy_turns[1] == "**Assistant:**\n\nYou test it like this.\n", agy_turns[1]
         assert agy_turns[2] == "**User:**\n\nNext real question\n", agy_turns[2]
         assert agy_turns[3] == "**Assistant:**\n\nNext real answer\n", agy_turns[3]
+
+    # A harness with no parseable transcript exits 3 so the skill skips, not fails.
+    import tempfile
+    r = subprocess.run([sys.executable, __file__, "--session-id", "no-such-session",
+                        "--output-dir", tempfile.mkdtemp()], capture_output=True)
+    assert r.returncode == EXIT_NO_TRANSCRIPT, r.stderr
 
     print("selftest ok")
 
