@@ -98,7 +98,7 @@ if [[ -z "$SESSION_ID" ]]; then
       echo "  claude --resume                                    # Interactive list (Claude Code)"
       echo "  grep sessionId ~/.claude/history.jsonl | head -20"
       echo "  ls -lt ~/.gemini/antigravity-ide/brain/ | head -20 # Antigravity IDE"
-      exit 1
+      exit 3  # no transcript for this harness: the skill skips this step
     fi
   fi
 fi
