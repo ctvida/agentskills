@@ -135,6 +135,12 @@ The smallest-first-action rule governs starting, never scope: name an easy
 entry point, then state the whole objective. A resume point scaled down to one
 step is that rule misapplied.
 
+**Name design sources, never paraphrase them.** When the work has a mockup or
+design artifact, the resume point says `Design source: <url>. Read it before
+building UI.` and does not describe the design in its own words. A prose
+summary of a mockup reads as complete, and the next agent builds from the
+summary instead of the artifact.
+
 Keep it to a paragraph the operator can read in a card. Findings, blockers, and
 the plan itself belong in the project file's body, not in the field.
 
