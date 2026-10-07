@@ -24,6 +24,12 @@
       "prompt": "/export-session (after a session that ruled out one approach and learned a fact only from a command's output)",
       "expected_output": "Before showing the draft, runs the gap check: the ruled-out approach and the tool-output fact are written into the project file (changelog/findings or plan), not into next_action. The draft is shown with one line naming what the gap check added and where.",
       "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "/export-session (after a session whose every step was committed and verified)",
+      "expected_output": "No gap check runs and none is mentioned; the draft resume point is shown for confirmation as usual.",
+      "files": []
     }
   ]
 }
