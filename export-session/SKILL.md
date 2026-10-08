@@ -169,6 +169,7 @@ gate item the step names on a `Gate:` line, and logs a win.
 4. **Verify with the operator unless waived.** Show the draft of `next_action` and `## Operator next steps` and wait for confirmation before writing, unless the operator explicitly stated in their prompt that no verification is needed. Never write it silently without that explicit waiver.
 5. **Write it (step 1).** After operator confirmation (or explicit waiver), write the resume point to the repo file and commit if working on a branch.
 6. **Export (step 2).** Run `scripts/export-session.sh`. Exit 3 means skip, as described under "Two steps, always both attempted".
+7. **The export is the turn's last action.** The exporter records only finished turns, so the reply that runs it is never in the file. Do every edit, commit and answer first, then export, then reply with the export result only. If the operator asks something in the same message as the export, answer it, finish its work, and export last. Work done after the export in the same turn is not recorded: say so in the reply and re-export on the next turn. (2026-10-08: an answer written 5 seconds after the re-export was missing from the file and read as an unanswered question.)
 
 ## Re-exporting a session you continued
 
@@ -181,6 +182,8 @@ date` and writes nothing.
 
 This is the normal case: something surfaces during an export, you keep working,
 and you export again. One file per session, growing.
+
+The re-export misses its own turn too (Procedure step 7), so run it after that turn's work, never before it.
 
 `--new` forces a separate file instead. Use it when the session genuinely
 turned into different work and one record would bury it.
