@@ -39,6 +39,10 @@ _COMMAND_NAME_TAG_RE = re.compile(r"<command-name>\s*(.*?)\s*</command-name>", r
 _LOCAL_COMMAND_OUTPUT_RE = re.compile(r"^\s*<local-command-(?:stdout|stderr)>", re.IGNORECASE)
 
 
+# agy retires model names (gemini-3.7-flash-medium went on 2026-10-12, which
+# failed every export); `agy --model x` with a bad name lists the current ones.
+DEFAULT_GEMINI = "gemini-3.8-flash-medium"
+
 def is_ai_meta_command(text: str) -> bool:
     """Return True if a user message is a slash-command about the AI/harness itself.
 
@@ -94,10 +98,10 @@ def get_model(cli_model: Optional[str] = None) -> str:
     if env_model := os.getenv("CLAUDE_EXPORT_MODEL"):
         return env_model
 
-    # 3. Prefer Gemini 3.7 Flash via agy CLI if available (fast, 1M context, saves Claude quota)
+    # 3. Prefer Gemini Flash via agy CLI if available (fast, 1M context, saves Claude quota)
     try:
         subprocess.run(["agy", "--version"], capture_output=True, check=True, timeout=2)
-        return "gemini-3.7-flash-medium"
+        return DEFAULT_GEMINI
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
@@ -402,10 +406,8 @@ TAGS: [tag1, tag2, tag3, ...]"""
                 model_name = model
                 if "://" in model:
                     model_name = model.split("://")[1]
-                if model_name in ("gemini-3.7", "gemini"):
-                    model_name = "gemini-3.7-flash-medium"
-                elif model_name == "gemini-3.8":
-                    model_name = "gemini-3.8-flash-medium"
+                if model_name in ("gemini", "gemini-3.8"):
+                    model_name = DEFAULT_GEMINI
                 result = subprocess.run(
                     ["agy", "--model", model_name, "-p", prompt],
                     capture_output=True,
@@ -600,7 +602,7 @@ def main():
     parser = argparse.ArgumentParser(description="Export Claude/Antigravity sessions to markdown")
     parser.add_argument("--session-id", required=True, help="Session ID to export")
     parser.add_argument("--transcript", default="", help="Optional explicit path to transcript file")
-    parser.add_argument("--model", default="", help="Summarizer model (e.g. gemini-3.7, claude-p-haiku)")
+    parser.add_argument("--model", default="", help="Summarizer model (e.g. gemini-3.8, claude-p-haiku)")
     parser.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_argument("--user-note", default="", help="Optional user note")
     parser.add_argument("--project-root", default="",
