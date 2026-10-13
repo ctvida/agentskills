@@ -21,10 +21,9 @@ if not _api_key:
     sys.exit(1)
 
 client = genai.Client(api_key=_api_key)
-# Most cost-efficient Gemini model; optimized for high-volume agentic tasks and data extraction.
-# NOTE: This is a preview model — rate limits may be more restrictive than stable models.
-# If you hit persistent 429s, fall back to gemini-2.5-flash-lite or gemini-2.0-flash.
-MODEL = "gemini-3.1-flash-lite-preview"
+# The stable lite model: cheapest Gemini tier, built for high-volume extraction.
+# Same model as analyzer.py. Was gemini-3.1-flash-lite-preview until 2026-10-13.
+MODEL = "gemini-3.5-flash-lite"
 
 # Marker for folders the taxonomy says need per-file content analysis
 _AMBIGUOUS_CANONICAL = "/Needs_Content_Analysis/"

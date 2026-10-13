@@ -21,8 +21,8 @@ if not _api_key:
     sys.exit(1)
 
 genai.configure(api_key=_api_key)
-# Using the requested model
-model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+# Same model as proposer.py.
+model = genai.GenerativeModel('gemini-3.5-flash-lite')
 
 def get_prompt(file_name, existing_taxonomy):
     taxonomy_list = "\n".join([f"- {path}" for path in existing_taxonomy])
