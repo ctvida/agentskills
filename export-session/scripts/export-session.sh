@@ -57,7 +57,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --session-id ID         Session ID to export (alternative to positional)"
       echo "  --note TEXT             Optional personal note/reminder for this export"
       echo "  --project PATH          Target project folder (relative to repo root)"
-      echo "  --model MODEL           Summarizer model (e.g. gemini-3.7, claude-p-haiku)"
+      echo "  --model MODEL           Summarizer model (e.g. gemini-3.8, claude-p-haiku)"
       echo "  --new                   Write a new file instead of appending to an existing export"
       echo "  --no-verify             Bypass pre-flight verification gate"
       echo "  --verified              Mark pre-flight resume point as verified"

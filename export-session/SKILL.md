@@ -262,7 +262,7 @@ model_used: haiku
 ## How it works
 
 1. **Session extraction**: Retrieves the specified session (current or by ID) via Claude or Antigravity IDE introspection
-2. **Summary + tags**: Summarizer reads the conversation and generates semantic tags and a one-line summary (defaults to Gemini 3.7 Flash via `agy` if available, or Claude Haiku subscription)
+2. **Summary + tags**: Summarizer reads the conversation and generates semantic tags and a one-line summary (defaults to Gemini 3.8 Flash via `agy` if available, or Claude Haiku subscription)
 3. **Project inference**: Automatically detects project root and target folder, or prompts interactively if ambiguous
 4. **Directory creation**: Creates `.workbench/sessions/` if needed
 5. **Markdown formatting**: Exports conversation with clean formatting and metadata
