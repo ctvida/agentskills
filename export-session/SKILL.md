@@ -102,9 +102,16 @@ settled by a command or a file:
 
 1. Say which done-when items are met and what settles each -- a command's
    output, a path, a commit. Evidence, not assertion.
-2. **Propose completion and wait.** The operator confirms or names what is
+2. **A met objective is not a finished project.** Read the project's backlog
+   (`backlog.md` or `BACKLOG.md`) and any plan with open steps. If anything is
+   still open, do not propose completion and do not leave the resume point
+   blank: write the next one from the open item whose trigger has fired, citing
+   the file that proves it fired. If no trigger has fired, write one line naming
+   the open items and what each waits on. A blank card reads as finished to the
+   next agent, and as "no plan" to anything that infers one.
+3. **Propose completion and wait**, only when nothing is open. The operator confirms or names what is
    still open. Never conclude a project silently.
-3. On confirmation, record it through whatever mechanism this repo's
+4. On confirmation, record it through whatever mechanism this repo's
    governance names for completion, which also clears the resume point. If it
    names none, say the objective is met and leave the record alone.
 
