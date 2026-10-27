@@ -1,5 +1,13 @@
-
 # UX/UI Psychology & Conversion Optimization Playbook for AI Coding Agents (v2)
+
+**Source audit (2026-10-27).** Checked against the nine transcripts in the UX psychology notebook. The principles hold up; the implementation rules are adaptation. Bracketed [n] markers are NotebookLM citation numbers and map to nothing here; the quotes below are the evidence.
+- 50 ms and halo: *"it takes a fraction of a second, about 50 milliseconds, for a user to form an opinion about your website"* [f2mGqlLLqok 0:30].
+- Goal gradient and head start: *"never start a user at zero. Find something they've already done and count it"* [2TlIg3VokY8 3:00]; the example form *"progress already shows 20%"* [2TlIg3VokY8 2:30].
+- MAYA: *"Designers call that sweet spot MAYA, most advanced yet acceptable"* [d-IaU9qcDGg 4:00].
+- Peak-end: *"people don't remember an experience as an average of every single moment"* [f2mGqlLLqok 3:00].
+- Squint test: *"The quickest way to test your own page is just squint your eyes at it or shrink it down small"* [cWZ9_EbT_2g 3:30].
+- One-hand test: *"check every build on a real phone held in one hand before you call it done"* [cWZ9_EbT_2g 9:30].
+- Add-on as percentage: *"Same $50, but now there's a small label next to it, just 2.6%"* [2TlIg3VokY8 10:00].
 
 This document serves as a production-grade, psychologically grounded UX/UI playbook designed to optimize digital products for maximum conversion, adoption, and retention. It translates cognitive science and human behavior patterns into concrete, actionable coding and design rules that AI coding agents can programmatically apply and enforce across web and mobile applications.
 
@@ -70,9 +78,9 @@ This document serves as a production-grade, psychologically grounded UX/UI playb
 *   **Psychological Principle:** Users arrive at your app with a pre-existing "mental model" (blueprint) of how websites work, built from every other site they have ever used (e.g., logo at top-left, navigation at the top, checkout cart at top-right) [35]. Violating these patterns forces the subconscious brain to overwork, causing physical irritation and high bounce rates [35, 36]. However, perfect predictability causes boredom [37]. The sweet spot is **MAYA (Most Advanced Yet Acceptable)**: keeping structures familiar while introducing tiny, pleasant, unjarring pattern-breaks to release dopamine [37, 38].
 *   **Actionable UI Strategies:**
     1.  **Stick to Predictable Layouts:** Position primary navigation, search bars, logos, and checkouts in standard, expected layouts [35, 36]. Do not move critical items simply for "creative" layouts [34, 36].
-    2.  **Break Small Patterns Safely:** Introduce micro-interactions that react to hover or scroll in subtle, slightly unexpected ways (e.g., a button that morphs or expands gently on hover, or an image that scales up by 2-5% on scroll) [38].
+    2.  **Break Small Patterns Safely:** Introduce micro-interactions that react to hover or scroll in subtle, slightly unexpected ways (e.g., a button that morphs or expands gently on hover, or an image that scales up slightly on scroll; no source gives a percentage) [38].
 *   **Before vs. After Examples:**
-    *   *Before (Gaming Bible):* Moved its mobile menu to the bottom corner—which on paper had better physical reach, but failed completely in practice because users couldn't find it and left the site [34].
+    *   *Before (Gaming Bible):* Moved its mobile menu to the bottom corner, which on paper had better physical reach, but failed completely in practice because users couldn't find it and left the site [34].
     *   *After:* The menu remains in its traditional top position, but a subtle hover scale or hover tooltip is added to interactive elements to make them feel alive and premium [34, 38].
 *   **Agent Code/Prompt Rule:**
     *   **Enforce Layout Familiarity:** Adhere strictly to industry-standard placements for navigation, search, logo, and checkout. Limit custom layouts to content blocks, and restrict animations to safe bounds (e.g., `transform: scale(1.03)` transitions) to avoid triggering the brain's survival alarm [21, 22, 23, 25].
@@ -130,12 +138,12 @@ This document serves as a production-grade, psychologically grounded UX/UI playb
     *   *Before:* An onboarding screen showing "0% Complete" with 5 empty steps, signaling a long and tedious setup ahead [48].
     *   *After:* The same onboarding screen showing "20% Complete," with step one ("Create Account") already checked off, creating immediate completion momentum [48].
 *   **Agent Code/Prompt Rule:**
-    *   **No-Zero-State Progress Check:** Initialize progress-tracking variables in user profiles at a minimum baseline of 15-20% by attributing weight to the initial sign-up, email verification, or registration actions [49].
+    *   **No-Zero-State Progress Check:** Initialize progress-tracking variables in user profiles at a baseline near 20% (the source's example) by attributing weight to the initial sign-up, email verification, or registration actions [49].
 
 ---
 
 ### 10. Reciprocity & Value-First Disclosure
-*   **Psychological Principle:** Reciprocity is a deep human instinct—when someone gives us something of value first, we feel an unconscious debt and a strong desire to return the favor [51]. Apps that ask for signups, emails, or credit cards before delivering any value ("holding results hostage") experience high bounce rates [50, 51].
+*   **Psychological Principle:** Reciprocity is a deep human instinct, when someone gives us something of value first, we feel an unconscious debt and a strong desire to return the favor [51]. Apps that ask for signups, emails, or credit cards before delivering any value ("holding results hostage") experience high bounce rates [50, 51].
 *   **Actionable UI Strategies:**
     1.  **Value-First Disclosure:** Allow users to interact, run calculations, scan, or experience the product first [50]. Deliver a partial, highly valuable, and legible subset of results before asking them to create an account or pay to unlock the rest [50].
 *   **Before vs. After Examples:**
@@ -201,7 +209,7 @@ This document serves as a production-grade, psychologically grounded UX/UI playb
 ---
 
 ### 15. Transparency Bias & Paywall De-risking
-*   **Psychological Principle:** Users are inherently skeptical of sales pitches and paywalls, anticipating traps (e.g., hidden recurring charges, hard-to-cancel plans) [58, 61]. Proactively revealing the mechanics of a transaction or a trial—including potential "downsides" like when the card will be charged—triggers the transparency bias, elevating trust and conversion [60].
+*   **Psychological Principle:** Users are inherently skeptical of sales pitches and paywalls, anticipating traps (e.g., hidden recurring charges, hard-to-cancel plans) [58, 61]. Proactively revealing the mechanics of a transaction or a trial, including potential "downsides" like when the card will be charged, triggers the transparency bias, elevating trust and conversion [60].
 *   **Actionable UI Strategies:**
     1.  **The Trial Transparency Timeline:** On paywalls, replace basic feature lists with a visual, step-by-step timeline of the trial period (e.g., Day 0: Unlock; Day 5: Reminder Email; Day 7: First Charge) [60]. Promising to remind users before charging them completely disarms the fear of being trapped [60, 62].
     2.  **Soften Button Copy:** Avoid transactional words (like "Subscribe") that trigger financial anxiety. Use starting/beginning terms (like "Start My Free Trial") to make the step feel light [61, 62].
@@ -259,10 +267,10 @@ This document serves as a production-grade, psychologically grounded UX/UI playb
 ---
 
 ### 19. The Peak-End Rule & Post-Purchase Delights
-*   **Psychological Principle:** People judge and remember experiences based on two specific moments: the most intense point (the **peak**—good or bad) and how the experience **ended** [25]. Micro-interactions are designed to create small peaks of positive emotion that add up to a powerful feeling of quality and craftsmanship [25, 26].
+*   **Psychological Principle:** People judge and remember experiences based on two specific moments: the most intense point (the **peak**: good or bad) and how the experience **ended** [25]. Micro-interactions are designed to create small peaks of positive emotion that add up to a powerful feeling of quality and craftsmanship [25, 26].
 *   **Actionable UI Strategies:**
     1.  **Thoughtful Post-Purchase Timelines:** Turn the stressful, post-payment waiting period into a positive peak experience. Use humanized tracking screens featuring courier photos, direct contact links, and visually pleasing, real-time progress timelines instead of simple dry text grids [75, 76, 77].
-    2.  **Delightful Feedback Loops:** Inject subtle animations and micro-interactions at high-intent moments—such as custom hover transitions [25], smooth page scrolls [25], and gentle success checkmarks upon form submissions [25].
+    2.  **Delightful Feedback Loops:** Inject subtle animations and micro-interactions at high-intent moments, such as custom hover transitions [25], smooth page scrolls [25], and gentle success checkmarks upon form submissions [25].
 *   **Before vs. After Examples:**
     *   *Before:* A static, lifeless post-purchase order screen showing text lists of items and dates [25, 76].
     *   *After:* A dynamic post-purchase tracker with a visual progress timeline, courier photo/name, and subtle micro-animations that make the interface feel alive and caring [25, 76, 77].
