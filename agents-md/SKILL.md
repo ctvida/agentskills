@@ -1,6 +1,6 @@
 ---
 name: agents-md
-description: Use when creating, reviewing, or trimming an AGENTS.md or CLAUDE.md file, when an agent config file has grown past a screen, when repeated agent mistakes suggest the instructions file is wrong, or when adopting a repo that has no agent config yet.
+description: Use before any edit to an AGENTS.md, CLAUDE.md or SOUL.md file, including a one-line addition, and when creating, reviewing, or trimming one, when an agent config file has grown past a screen, when repeated agent mistakes suggest the instructions file is wrong, or when adopting a repo that has no agent config yet.
 ---
 
 # agents-md
