@@ -158,7 +158,14 @@ the plan itself belong in the project file's body, not in the field.
 nowhere else: not in `next_action`, not in gate files, not in a plan's
 checkboxes. The cockpit's queue reads that section for every unit
 (`stack.py: operator_steps()`). Its checkbox removes the step, ticks every
-gate item the step names on a `Gate:` line, and logs a win.
+gate item the step names on a `Gate:` line. It does not log a win.
+
+**Never write routine use as a step.** Publishing a post, reviewing or
+approving a draft, logging a week, trying a feature, or anything the
+operator will do on his own cadence is not a step: the product's own surface
+(a Desk, a due list, a reminder) owns it. A step is a one-time blocker only
+the operator can clear, such as a key, an account, a payment or a ruling the
+agent cannot make. One step per draft is a defect (CT, 2026-11-04).
 
 - One list item per step: a **bold name**, then indented lines for where,
   done-when, and `Gate: <label>` when finishing the step clears a gate item. Only steps the operator can take now; a step waiting on agent work
