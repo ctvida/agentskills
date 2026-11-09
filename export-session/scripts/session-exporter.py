@@ -598,21 +598,203 @@ def redact(text: str, terms: list[str]) -> tuple[str, int]:
 EXIT_NO_TRANSCRIPT = 3
 
 
+def validate_next_action(text: str) -> list[str]:
+    """Validate next_action text according to resume point rules.
+
+    Returns a list of error strings. Empty list indicates valid next_action.
+
+    Enforces:
+    1. next_action must not stall on operator actions or passive waiting states
+       (e.g. starts with 'Waits on operator', 'Waiting on operator', 'WAITING', etc.).
+    2. Manual human actions (sign-offs, external calls, reviews, rulings) belong
+       exclusively in '## Operator next steps' and must not stall next_action.
+    """
+    errors = []
+    if not text or not text.strip():
+        return errors
+
+    trimmed = text.strip()
+
+    # Rule 1: Flag draft next_action that starts with "Waits on operator" or passive waiting states
+    stall_start_patterns = [
+        (
+            re.compile(r"^\s*waits?\s+on\s+operator\b", re.IGNORECASE),
+            "Draft next_action starts with 'Waits on operator'. Manual human actions (sign-offs, external calls, reviews) "
+            "belong exclusively in '## Operator next steps' and must never stall frontmatter next_action. "
+            "Inspect backlog.md (or BACKLOG.md) and draft the next unblocked engineering item into next_action.",
+        ),
+        (
+            re.compile(r"^\s*waiting\s*(?:on|for)?\s*operator\b", re.IGNORECASE),
+            "Draft next_action starts with waiting on operator. Manual human actions belong exclusively in "
+            "'## Operator next steps' and must never stall frontmatter next_action. "
+            "Inspect backlog.md (or BACKLOG.md) and draft the next unblocked engineering item into next_action.",
+        ),
+        (
+            re.compile(r"^\s*waiting\b", re.IGNORECASE),
+            "Draft next_action starts with passive waiting state ('WAITING'). next_action must strictly carry an "
+            "autonomous, checkable engineering goal for an agent session. If waiting on human action, record it in "
+            "'## Operator next steps' and promote an unblocked backlog item.",
+        ),
+    ]
+
+    for pat, msg in stall_start_patterns:
+        if pat.search(trimmed):
+            errors.append(msg)
+            break
+
+    # Rule 2: Flag phrases where manual human actions stall next_action
+    human_wait_patterns = [
+        re.compile(r"\bwaits?\s+on\s+(?:operator|human|user|review|sign-?off|approval|ruling)\b", re.IGNORECASE),
+        re.compile(r"\bwaiting\s+(?:on|for)\s+(?:operator|human|user|review|sign-?off|approval|ruling)\b", re.IGNORECASE),
+        re.compile(r"\boperator\s+(?:sign-?off|review|approval|call)\b", re.IGNORECASE),
+    ]
+    for pat in human_wait_patterns:
+        m = pat.search(trimmed)
+        if m and not errors:
+            errors.append(
+                f"next_action contains human/operator dependency ({m.group(0)!r}). "
+                "Manual human actions belong exclusively in '## Operator next steps'; "
+                "next_action must strictly carry an autonomous, checkable engineering goal."
+            )
+            break
+
+    return errors
+
+
+def find_project_backlog(project_dir: Path) -> Optional[Path]:
+    """Find backlog.md or BACKLOG.md in project_dir or immediate children."""
+    candidates = ["backlog.md", "BACKLOG.md"]
+    for c in candidates:
+        p = project_dir / c
+        if p.is_file():
+            return p
+    for c in candidates:
+        for p in project_dir.glob(f"*/{c}"):
+            if p.is_file():
+                return p
+    return None
+
+
+def survey_backlog(backlog_path: Path) -> list[dict]:
+    """Inspect backlog.md (or BACKLOG.md) and extract open items and triggers.
+
+    Returns a list of dicts: [{'title': ..., 'trigger': ..., 'body': ...}]
+    """
+    if not backlog_path.is_file():
+        return []
+
+    content = backlog_path.read_text(errors="ignore")
+    # Split by level 2 headings
+    sections = re.split(r"(?m)^##\s+", content)
+    items = []
+    for sec in sections[1:]:
+        lines = sec.splitlines()
+        if not lines:
+            continue
+        title = lines[0].strip()
+        body = "\n".join(lines[1:]).strip()
+
+        # Skip if explicitly marked closed/done in heading
+        if re.search(r"\b(CLOSED|DONE|SHIPPED|MOVED)\b", title, re.IGNORECASE):
+            continue
+
+        # Check for trigger
+        trigger_match = re.search(r"\*\*Trigger:?\*\*\s*(.+)", body, re.IGNORECASE)
+        if not trigger_match:
+            trigger_match = re.search(r"Trigger:?\s*(.+)", body, re.IGNORECASE)
+        trigger = trigger_match.group(1).strip() if trigger_match else ""
+
+        items.append({
+            "title": title,
+            "trigger": trigger,
+            "body": body,
+        })
+    return items
+
+
+def extract_next_action_from_yaml(frontmatter_text: str) -> Optional[str]:
+    """Extract next_action value from frontmatter string."""
+    m = re.search(r"(?m)^next_action:\s*(.*)$", frontmatter_text)
+    if not m:
+        return None
+    val = m.group(1).strip()
+    if val in (">", ">-", "|", "|-"):
+        # multiline scalar - grab subsequent indented lines
+        start_idx = m.end()
+        subsequent = frontmatter_text[start_idx:]
+        lines = []
+        for line in subsequent.splitlines():
+            if line.startswith("  ") or line.startswith("\t") or not line.strip():
+                lines.append(line.strip())
+            else:
+                break
+        return " ".join(l for l in lines if l)
+    return val.strip('"\'')
+
+
 def main():
     parser = argparse.ArgumentParser(description="Export Claude/Antigravity sessions to markdown")
-    parser.add_argument("--session-id", required=True, help="Session ID to export")
+    parser.add_argument("--session-id", default="", help="Session ID to export")
     parser.add_argument("--transcript", default="", help="Optional explicit path to transcript file")
     parser.add_argument("--model", default="", help="Summarizer model (e.g. gemini-3.8, claude-p-haiku)")
-    parser.add_argument("--output-dir", required=True, help="Output directory")
+    parser.add_argument("--output-dir", default="", help="Output directory")
     parser.add_argument("--user-note", default="", help="Optional user note")
     parser.add_argument("--project-root", default="",
                         help="Project root recorded in frontmatter (defaults to output dir's parent)")
     parser.add_argument("--new", action="store_true",
                         help="Always write a new file, even if this session was exported before")
+    parser.add_argument("--validate-next-action", default="",
+                        help="Validate draft next_action string and exit (0=valid, 1=invalid)")
+    parser.add_argument("--survey-backlog", default="", nargs="?", const=".",
+                        help="Inspect backlog.md in specified directory (or cwd) and list open items")
 
     args = parser.parse_args()
 
+    if args.validate_next_action:
+        errors = validate_next_action(args.validate_next_action)
+        if errors:
+            for err in errors:
+                print(f"Error: {err}", file=sys.stderr)
+            sys.exit(1)
+        print("✓ next_action is valid")
+        sys.exit(0)
+
+    if args.survey_backlog:
+        p = Path(args.survey_backlog)
+        backlog_file = p if p.is_file() else find_project_backlog(p)
+        if not backlog_file:
+            print(f"No backlog.md found in {p}", file=sys.stderr)
+            sys.exit(1)
+        items = survey_backlog(backlog_file)
+        print(f"Found {len(items)} open backlog item(s) in {backlog_file}:")
+        for idx, item in enumerate(items, 1):
+            trig_info = f" (Trigger: {item['trigger'][:60]}...)" if item['trigger'] else " (No trigger)"
+            print(f"  {idx}. {item['title']}{trig_info}")
+        sys.exit(0)
+
+    if not args.session_id or not args.output_dir:
+        parser.error("--session-id and --output-dir are required for session export")
+
     try:
+        output_dir = Path(args.output_dir)
+        project_root = args.project_root or str(output_dir.parent.parent)
+
+        # Check project root _index.md next_action if present
+        idx_file = Path(project_root) / "_index.md"
+        if idx_file.is_file():
+            try:
+                fm_match = re.search(r"^---\n(.*?)\n---", idx_file.read_text(errors="ignore"), re.DOTALL)
+                if fm_match:
+                    na_val = extract_next_action_from_yaml(fm_match.group(1))
+                    if na_val:
+                        errors = validate_next_action(na_val)
+                        if errors:
+                            print(f"\n⚠️  Resume point validation warning in {idx_file}:", file=sys.stderr)
+                            for err in errors:
+                                print(f"   - {err}", file=sys.stderr)
+            except Exception:
+                pass
+
         # Get model
         model = get_model(cli_model=args.model)
 
@@ -627,7 +809,6 @@ def main():
             sys.exit(EXIT_NO_TRANSCRIPT)
         conversation = "\n".join(turns)
 
-        output_dir = Path(args.output_dir)
         existing = None if args.new else find_existing_export(output_dir, args.session_id)
 
         if existing:
@@ -804,6 +985,82 @@ def selftest():
     r = subprocess.run([sys.executable, __file__, "--session-id", "no-such-session",
                         "--output-dir", tempfile.mkdtemp()], capture_output=True)
     assert r.returncode == EXIT_NO_TRANSCRIPT, r.stderr
+
+    # Resume point next_action validation tests
+    # Must flag draft next_action starting with "Waits on operator" or passive waiting states
+    err1 = validate_next_action("Waits on operator review of Phase 2 spec.")
+    assert err1 and "starts with 'Waits on operator'" in err1[0], err1
+    err2 = validate_next_action("waits on operator steps 7 and 8 in _index.md")
+    assert err2 and "starts with 'Waits on operator'" in err2[0], err2
+    err3 = validate_next_action("Waiting on operator for credentials")
+    assert err3 and "waiting on operator" in err3[0].lower(), err3
+    err4 = validate_next_action("WAITING. Reference path tested and merged 2026-11-05.")
+    assert err4 and "WAITING" in err4[0], err4
+    err5 = validate_next_action("Phase 1 done, waits on operator sign-off")
+    assert err5 and "operator dependency" in err5[0], err5
+
+    # Checkable autonomous next_action must pass without errors
+    assert not validate_next_action(
+        "Objective: Build SQLite cache for session exporter.\n"
+        "Plan: docs/PLAN.md\n"
+        "Standing instruction: Work top to bottom.\n"
+        "Done-when: tests pass."
+    )
+    assert not validate_next_action("")
+
+    # YAML extraction test
+    fm_single = "title: Test\nnext_action: \"Simple action\"\nstatus: active"
+    assert extract_next_action_from_yaml(fm_single) == "Simple action"
+
+    fm_folded = "title: Test\nnext_action: >-\n  Objective: Test\n  Plan: plan.md\nstatus: active"
+    assert extract_next_action_from_yaml(fm_folded) == "Objective: Test Plan: plan.md"
+
+    # CLI --validate-next-action test
+    r_val_fail = subprocess.run(
+        [sys.executable, __file__, "--validate-next-action", "Waits on operator to approve"],
+        capture_output=True, text=True
+    )
+    assert r_val_fail.returncode == 1, r_val_fail.returncode
+    assert "Waits on operator" in r_val_fail.stderr, r_val_fail.stderr
+
+    r_val_ok = subprocess.run(
+        [sys.executable, __file__, "--validate-next-action", "Objective: Complete Phase 2"],
+        capture_output=True, text=True
+    )
+    assert r_val_ok.returncode == 0, r_val_ok.returncode
+    assert "✓ next_action is valid" in r_val_ok.stdout, r_val_ok.stdout
+
+    # Test backlog survey helper and CLI
+    with tempfile.TemporaryDirectory() as td:
+        tp = Path(td)
+        backlog_content = (
+            "# Backlog\n\n"
+            "## 1. Automated backlog progression\n"
+            "**What it is:** Draft next backlog item on objective complete.\n"
+            "**Trigger:** An active objective completes.\n\n"
+            "## 2. Deprecated task (CLOSED)\n"
+            "**What it is:** Closed item.\n\n"
+            "## 3. Secondary task\n"
+            "**What it is:** Some secondary item.\n"
+            "Trigger: When user requests it.\n"
+        )
+        (tp / "backlog.md").write_text(backlog_content)
+        assert find_project_backlog(tp) == tp / "backlog.md"
+        items = survey_backlog(tp / "backlog.md")
+        assert len(items) == 2, f"Expected 2 open items, got {len(items)}"
+        assert items[0]["title"] == "1. Automated backlog progression"
+        assert items[0]["trigger"] == "An active objective completes."
+        assert items[1]["title"] == "3. Secondary task"
+        assert items[1]["trigger"] == "When user requests it."
+
+        # CLI --survey-backlog test
+        r_survey = subprocess.run(
+            [sys.executable, __file__, "--survey-backlog", td],
+            capture_output=True, text=True
+        )
+        assert r_survey.returncode == 0, r_survey.returncode
+        assert "Found 2 open backlog item(s)" in r_survey.stdout, r_survey.stdout
+        assert "1. Automated backlog progression" in r_survey.stdout, r_survey.stdout
 
     print("selftest ok")
 
