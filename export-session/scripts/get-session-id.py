@@ -26,6 +26,7 @@ ENV_VARS = (
     "CLAUDE_CODE_SESSION_ID",
     "SESSION_ID",
     "ANTIGRAVITY_CONVERSATION_ID",
+    "ANTIGRAVITY_SESSION_ID",
 )
 AMBIGUOUS_WINDOW = 300  # seconds
 
@@ -56,6 +57,8 @@ def get_agy_candidates(cwd: Path) -> list[Tuple[float, str, Path]]:
         Path.home() / ".gemini" / "antigravity-ide" / "brain",
         Path.home() / ".gemini" / "antigravity-cli" / "brain",
     ]
+    if os.getenv("ANTIGRAVITY_APP_DATA_DIR"):
+        brain_dirs.insert(0, Path(os.environ["ANTIGRAVITY_APP_DATA_DIR"]) / "brain")
 
     git_root = find_git_root(cwd)
     project_paths = [str(cwd)]
@@ -126,11 +129,14 @@ def get_current_session(
             # Look up transcript path if possible
             tpath = None
             if harness == "antigravity":
-                for bdir in [
+                brain_dirs = [
                     Path.home() / ".gemini" / "antigravity" / "brain",
                     Path.home() / ".gemini" / "antigravity-ide" / "brain",
                     Path.home() / ".gemini" / "antigravity-cli" / "brain",
-                ]:
+                ]
+                if os.getenv("ANTIGRAVITY_APP_DATA_DIR"):
+                    brain_dirs.insert(0, Path(os.environ["ANTIGRAVITY_APP_DATA_DIR"]) / "brain")
+                for bdir in brain_dirs:
                     candidate = bdir / sid / ".system_generated" / "logs" / "transcript.jsonl"
                     if candidate.exists():
                         tpath = candidate

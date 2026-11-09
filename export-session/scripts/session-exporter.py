@@ -152,9 +152,15 @@ def get_model(cli_model: Optional[str] = None) -> str:
 
 def parse_agy_transcript(path: Path, session_id: str) -> list[str]:
     """Reconstruct conversation from Antigravity IDE JSONL transcript."""
+    target_path = path
+    if path.name == "transcript.jsonl":
+        full_path = path.parent / "transcript_full.jsonl"
+        if full_path.is_file():
+            target_path = full_path
+
     turns = []
     skip_next_assistant = False
-    with open(path, "r", errors="ignore") as f:
+    with open(target_path, "r", errors="ignore") as f:
         for line in f:
             if not line.strip():
                 continue
@@ -174,7 +180,10 @@ def parse_agy_transcript(path: Path, session_id: str) -> list[str]:
                     skip_next_assistant = True
                     continue
                 skip_next_assistant = False
-                turns.append(f"**User:**\n\n{text}\n")
+                user_turn = f"**User:**\n\n{text}\n"
+                if turns and turns[-1] == user_turn:
+                    continue
+                turns.append(user_turn)
             elif etype == "PLANNER_RESPONSE":
                 if skip_next_assistant:
                     continue
@@ -250,6 +259,8 @@ def get_session_turns(session_id: str, transcript_path: str = "") -> list[str]:
             Path.home() / ".gemini" / "antigravity-ide" / "brain",
             Path.home() / ".gemini" / "antigravity-cli" / "brain",
         ]
+        if os.getenv("ANTIGRAVITY_APP_DATA_DIR"):
+            brain_dirs.insert(0, Path(os.environ["ANTIGRAVITY_APP_DATA_DIR"]) / "brain")
         agy_candidate = None
         for bdir in brain_dirs:
             cand = bdir / session_id / ".system_generated" / "logs" / "transcript.jsonl"
@@ -961,11 +972,13 @@ def selftest():
     except SystemExit as e:
         assert e.code == 1, e.code
 
-    # Test Antigravity IDE transcript parsing
+    # Test Antigravity IDE transcript parsing (including retry deduplication)
     import tempfile
     with tempfile.NamedTemporaryFile("w+", suffix=".jsonl") as tf:
         tf.write(
             json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "<USER_REQUEST>\nHow to test AGY?\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nsome metadata\n</ADDITIONAL_METADATA>"}) + "\n"
+            + json.dumps({"type": "PLANNER_RESPONSE", "source": "MODEL", "content": None}) + "\n"
+            + json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "<USER_REQUEST>\nHow to test AGY?\n</USER_REQUEST>\n<USER_SETTINGS_CHANGE>\nmodel changed\n</USER_SETTINGS_CHANGE>"}) + "\n"
             + json.dumps({"type": "PLANNER_RESPONSE", "source": "MODEL", "content": "You test it like this."}) + "\n"
             + json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "/model haiku"}) + "\n"
             + json.dumps({"type": "PLANNER_RESPONSE", "source": "MODEL", "content": "Switched model."}) + "\n"

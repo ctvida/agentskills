@@ -85,6 +85,8 @@ if [[ -z "$SESSION_ID" ]]; then
     SESSION_ID="$CLAUDE_SESSION_ID"
   elif [[ -n "${ANTIGRAVITY_CONVERSATION_ID:-}" ]]; then
     SESSION_ID="$ANTIGRAVITY_CONVERSATION_ID"
+  elif [[ -n "${ANTIGRAVITY_SESSION_ID:-}" ]]; then
+    SESSION_ID="$ANTIGRAVITY_SESSION_ID"
   else
     echo "No session ID provided. Getting current session..."
     # Try to extract from claude or antigravity context if available
@@ -97,7 +99,7 @@ if [[ -z "$SESSION_ID" ]]; then
       echo "Find session IDs via:"
       echo "  claude --resume                                    # Interactive list (Claude Code)"
       echo "  grep sessionId ~/.claude/history.jsonl | head -20"
-      echo "  ls -lt ~/.gemini/antigravity-ide/brain/ | head -20 # Antigravity IDE"
+      echo "  ls -lt ~/.gemini/antigravity/brain/ | head -20      # Antigravity"
       exit 3  # no transcript for this harness: the skill skips this step
     fi
   fi
