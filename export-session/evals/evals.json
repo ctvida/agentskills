@@ -30,6 +30,18 @@
       "prompt": "/export-session (after a session whose every step was committed and verified)",
       "expected_output": "No gap check runs and none is mentioned; the draft resume point is shown for confirmation as usual.",
       "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "/export-session (after completing the active objective, with open unblocked items in backlog.md)",
+      "expected_output": "Inspects backlog.md (or BACKLOG.md), identifies the next unblocked engineering item or fired trigger, and drafts that item into next_action in the required four-part shape (Objective, Plan pointer, Standing instruction, Done-when). Does not propose completion or clear the card while open unblocked engineering items exist.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "/export-session (when the next task in the current plan requires operator review or manual sign-off)",
+      "expected_output": "Enforces strict separation: places manual human actions (reviews, sign-offs, external calls) exclusively into ## Operator next steps, and inspects backlog.md for unblocked engineering items to draft into next_action. Never stalls frontmatter next_action with 'Waits on operator' or passive waiting phrases.",
+      "files": []
     }
   ]
 }

@@ -18,10 +18,11 @@ compatibility: Requires claude CLI (Claude Code), agy CLI (Antigravity), or loca
 When the operator invokes `/export-session`:
 
 1. **Next action is always written unless there is no legitimate next action.**
-   - If the project's objective was completely met (every done-when item settled by a command or file), propose completion to the operator.
+   - If the project's active objective was completely met (every done-when item settled by a command or file): inspect `backlog.md` (or `BACKLOG.md`). If there are open unblocked engineering tasks or fired triggers, automatically draft the next backlog item into `next_action`. Only propose completion if the project has zero open unblocked items anywhere in `backlog.md` or active plans.
+   - **Operator waits never stall `next_action`:** Manual human actions (sign-offs, external calls, reviews, approvals) belong exclusively in `## Operator next steps`. Frontmatter `next_action` must strictly carry an autonomous, checkable engineering goal for an agent session and must NEVER stall with "Waits on operator" or passive waiting phrases.
    - Otherwise, a resume point MUST be written.
-2. **Next action is driven by Objective.**
-   - Derive `next_action` directly from `objective.md` or the standing project goal, not just the micro-task touched last.
+2. **Next action is driven by Objective or unblocked Backlog item.**
+   - Derive `next_action` directly from `objective.md`, the standing project goal, or the next unblocked item in `backlog.md` / `BACKLOG.md`, not just the micro-task touched last.
    - Follow the required four-part shape: Objective, Plan (a pointer), Standing instruction, Done-when.
 3. **Verification with the operator:**
    - **Unless stated by the operator in the prompt that no verification is needed** (e.g., "no verification needed", "--no-verify", "just export"):
@@ -102,13 +103,11 @@ settled by a command or a file:
 
 1. Say which done-when items are met and what settles each -- a command's
    output, a path, a commit. Evidence, not assertion.
-2. **A met objective is not a finished project.** Read the project's backlog
-   (`backlog.md` or `BACKLOG.md`) and any plan with open steps. If anything is
-   still open, do not propose completion and do not leave the resume point
-   blank: write the next one from the open item whose trigger has fired, citing
-   the file that proves it fired. If no trigger has fired, write one line naming
-   the open items and what each waits on. A blank card reads as finished to the
-   next agent, and as "no plan" to anything that infers one.
+2. **A met objective is not a finished project (Automated Backlog Survey).** When the active objective is met (or when the current plan has closed), `/export-session` MUST inspect the project's backlog (`backlog.md` or `BACKLOG.md`) and any plan with open steps:
+   - **Survey backlog items:** Identify open items whose triggers have fired or unblocked engineering tasks.
+   - **Auto-draft the next backlog item:** If an unblocked engineering item exists, `/export-session` must automatically draft that item as the new `next_action` in the required four-part shape (Objective, Plan pointer, Standing instruction, Done-when) rather than leaving the project stalled or clearing the card. Cite the backlog item number, title, and trigger.
+   - **Operator waits never stall `next_action`:** If the next step in the current plan requires manual human action (such as operator review, external sign-off, or credentials), place that requirement exclusively into `## Operator next steps`. Do NOT stall `next_action` with a holding statement like "Waits on operator". Instead, inspect `backlog.md` for independent, unblocked engineering items and draft the next one into `next_action`.
+   - **Completion proposed only when backlog is empty:** Only propose completion when `backlog.md` and active plans hold zero unblocked items. Never conclude a project silently.
 3. **Propose completion and wait**, only when nothing is open. The operator confirms or names what is
    still open. Never conclude a project silently.
 4. On confirmation, record it through whatever mechanism this repo's
@@ -160,6 +159,17 @@ checkboxes. The cockpit's queue reads that section for every unit
 (`stack.py: operator_steps()`). Its checkbox removes the step, ticks every
 gate item the step names on a `Gate:` line. It does not log a win.
 
+**Strict separation of Operator Waits and Agent Next Actions:**
+Any step requiring manual human action (signing off a review, legal filing, external
+email or call, credential entry, human ruling) belongs exclusively in `## Operator next steps`,
+NEVER in frontmatter `next_action`. Frontmatter `next_action` must strictly carry
+an autonomous, checkable engineering goal for an agent session.
+
+**`next_action` must never stall on a human wait:** A draft `next_action` must
+NEVER begin with "Waits on operator", "WAITING", or describe waiting on human review or approval.
+If the current plan has closed or is blocked waiting on an operator step, inspect `backlog.md`
+(or `BACKLOG.md`) for open unblocked engineering items and promote one to `next_action`.
+
 **Never write routine use as a step.** Publishing a post, reviewing or
 approving a draft, logging a week, trying a feature, or anything the
 operator will do on his own cadence is not a step: the product's own surface
@@ -178,7 +188,7 @@ agent cannot make. One step per draft is a defect (CT, 2026-11-04).
 ### Procedure
 
 1. **Find the destination.** Use the file or frontmatter field named by this repo's `CLAUDE.md` or `AGENTS.md`. In repos with `_index.md`, write to frontmatter `next_action`. If it names none, use `ops/next-session-prompt.md`.
-2. **Draft the objective** in the four-part shape above, driven directly by `objective.md`. Put operator-only steps in `## Operator next steps` in the body.
+2. **Draft the objective** in the four-part shape above. If the active objective completed, inspect `backlog.md` (or `BACKLOG.md`) and promote the next unblocked engineering item into `next_action`. If the immediate next step requires operator action, put that step in `## Operator next steps` and promote an unblocked backlog task into `next_action`. Ensure `next_action` never starts with "Waits on operator" or passive waiting phrases. Put operator-only steps in `## Operator next steps` in the body.
 3. **Gap check, only mid-task.** Run it only when the session stops partway through a plan step: an edit not yet verified, or a step started but not committed. A session that ended on committed, finished work skips this step silently. When it runs, before showing the draft, ask yourself: what does this session know that the next one will need and that the draft, the project file and its linked files do not say? Look for decisions made in conversation, dead ends already ruled out (and why), facts learned from tool output, and constraints the operator stated. Put each gap where it belongs, never in the resume point: a missing step into the plan in the project file's body, a decision or a ruled-out approach into the project file's changelog or findings file, an operator-only step into `## Operator next steps`. Keep the resume point to its paragraph. When you show the draft, list in one line what the gap check added and where,  The exported transcript keeps prompts and replies, not tool output, so a fact that only exists in a tool result is lost on restart unless this step writes it down.
 4. **Verify with the operator unless waived.** Show the draft of `next_action` and `## Operator next steps` and wait for confirmation before writing, unless the operator explicitly stated in their prompt that no verification is needed. Never write it silently without that explicit waiver.
 5. **Write it (step 1).** After operator confirmation (or explicit waiver), write the resume point to the repo file and commit if working on a branch.
