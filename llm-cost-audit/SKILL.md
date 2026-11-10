@@ -31,10 +31,15 @@ The target code may be a client's and untrusted. Read it; run nothing from it ou
 - **Cache.** A repeated long prefix (system prompt, shared document, few-shot block) uses the provider's context caching.
 - **Delta.** Each run processes only inputs that changed since the last run, keyed by content hash. The classic monthly waste is reprocessing the whole corpus.
 - **Raw store.** Every paid response is written to disk before parsing, so a parse bug or rerun never pays twice.
-- **Checkpoint.** A long loop persists each finished item, so a crash at 90% resumes instead of restarting from zero.
+- **Checkpoint.** A long loop persists each finished item, so a crash at 90% resumes instead of restarting from zero. A failed item is recorded as failed, never as done, or the rerun skips it and the work is lost.
 - **Retry discipline.** Backoff with a cap, retries only on retryable errors (429, 5xx), and no retry inside a retry. Count retries per run, since they are invisible on the bill.
-- **Bounded input.** Inputs are trimmed to what the task needs: excerpts over whole documents, downscaled images and video frames, a bounded time window.
+- **Bounded input.** Inputs are trimmed to what the task needs: excerpts over whole documents, downscaled images and video frames, a bounded time window. The same content appears once per prompt, not twice.
 - **Bounded output.** `max_output_tokens` set, structured output in place of verbose prose, no echoing the input back.
+- **Loops.** A model call inside an automatic loop (auto-refine, retry-until-score, agent loops) runs on demand or under a hard cap. A loop chasing a score that moves by noise on identical input multiplies spend for nothing.
+- **Fallback.** A failure on the cheap model can fall through to a pricier model or provider. Count fallbacks per run, since the bill shows only the expensive model.
+- **Cadence.** A scheduled job runs as often as its inputs change, not more. A completion marker written only on success makes catch-up logic rerun the whole job on every trigger after a failure.
+- **Tools.** A plain text-generation call carries no agent tools. A call that runs as an agent reads files and runs commands, paying tokens for work nobody asked for.
+- **Billing route.** The same work on a cheaper route: batch, committed-use or provisioned capacity, or a flat-rate plan the owner already pays for.
 - **Fan-in.** Many small per-item calls that share context are combined into fewer calls where quality holds.
 - **Dead calls.** Results that nothing reads, duplicate calls for the same input in one run, calls from test or dev environments on the production key.
 - **Guardrail.** A spend cap or budget alert on the key or project, and a per-run cost log. Note it as a finding when absent even though it saves nothing directly; it catches the next regression.
