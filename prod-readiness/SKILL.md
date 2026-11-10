@@ -35,12 +35,18 @@ Rate how a codebase is built, deployed, tested, observed and recovered, and turn
 
 **Scheduled and batch jobs**
 - Each job is idempotent: a rerun produces the same result without duplicating work or cost.
-- Long jobs checkpoint per item and resume after a crash.
+- Long jobs checkpoint per item and resume after a crash. The checkpoint tells failed from done, and a re-fetch keeps state already verified.
+- One bad item (a 404, a malformed record) is logged and skipped. A queue cursor that advances only after a clean batch lets one poison item stop every later run.
+- Completion markers are written after the work they mark. A marker written early hides a failure; one never written triggers repeat runs.
+- The job is tested under the scheduler's own environment (PATH, HOME, working directory, credentials, shell quoting), which differs from the developer's shell.
+- Runs that never fired (host asleep, cold start, disabled trigger) are detected, not only runs that failed.
 - Each run is observable after the fact: start, finish, item counts, cost, exit status.
 - A missed or failed run alerts a person. Silence counts as a failure: a probe that checks the job actually ran.
 
 **Failure handling**
-- Errors fail loudly: no swallowed exceptions, no empty `catch`, and expired auth surfaces as an error rather than empty data.
+- Errors fail loudly: no swallowed exceptions, no empty `catch`, no `|| true` on a step that matters, and expired auth surfaces as an error rather than empty data.
+- A job that fails exits nonzero, so the scheduler's status is true. A log line saying "failed" under a zero exit reads as healthy.
+- Decisions that must be right (gates, approvals, eligibility) are made by code and exit codes. A model call may advise; it never decides them.
 - Retries back off and cap, on retryable errors only.
 - External calls have timeouts.
 
