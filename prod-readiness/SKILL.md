@@ -58,6 +58,12 @@ Rate how a codebase is built, deployed, tested, observed and recovered, and turn
 - Secrets come from the platform's secret store or environment, never the repo.
 - Config that selects a model, endpoint or plan is read where it is used (trace one value from config to the request).
 
+**Efficiency (non-model spend)**
+- API and database responses return the fields the page uses: no overfetching whole records, no N+1 query loops.
+- Images and video served at display size in modern formats; page weight measured on the key pages.
+- Compute matches the load: a monthly job does not run on always-on servers, and idle environments scale to zero.
+- Egress and logging volume checked against the bill; verbose debug logging off in production.
+
 **Ownership**
 - A runbook for the top three failure modes.
 - Monitoring on uptime and error rate, with alerts routed to a person.

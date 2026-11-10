@@ -1,11 +1,11 @@
 ---
 name: llm-cost-audit
-description: LLM API spend audit of a codebase. Use when a client or repo has a model bill to cut (Gemini, OpenAI, Anthropic, OpenRouter), when asked where model spend goes or how to reduce it, or as the cost leg of an engagement diagnostic. Produces a dollar-ranked findings file.
+description: LLM API spend and efficiency audit of a codebase, covering working code that overspends as well as defects. Use when a client or repo has a model bill to cut (Gemini, OpenAI, Anthropic, OpenRouter), when asked where model spend goes or how to reduce it, or as the cost leg of an engagement diagnostic. Produces a dollar-ranked findings file.
 ---
 
 # llm-cost-audit
 
-Find every paid model call in a codebase, tie the bill to call sites, and rank savings levers in dollars. Read-only: the audit changes no code.
+Find every paid model call in a codebase, tie the bill to call sites, and rank savings levers in dollars. Most savings sit in code that works: payloads larger than the task needs, items sent one call at a time, work handed to a model that code could do. Read-only: the audit changes no code.
 
 The target code may be a client's and untrusted. Read it; run nothing from it outside a container.
 
@@ -17,11 +17,14 @@ The target code may be a client's and untrusted. Read it; run nothing from it ou
 2. **Tie the bill to the sites.** Read the billing export (by model and SKU, monthly). Attribute spend to call sites by model, SKU (input, output, cached, thinking tokens), and trigger timing. When there is no bill, estimate tokens × current list price from logs or sample inputs, and label every number an *estimate*. Fetch the current price sheet at run time and record its date; prices move.
    Done when 90% or more of spend maps to named sites, or the unmapped share is stated.
 
-3. **Apply every lever to every site.** Use the lever list below. Each site × lever cell is a finding, `n/a` with a reason, or `needs data` with what data.
+3. **Measure the payloads.** For each site in the top 80% of spend (the tail rarely repays the capture work), capture real requests and break each prompt into its parts: instructions, examples, data, serialization overhead (keys, whitespace, markup), and media. Record tokens per part and what share of the data the output actually uses. Twenty requests per site shows what a prompt is made of; this measures composition, not an average, so more adds little.
+   Done when each of those sites has a token breakdown and a used-versus-sent ratio.
 
-4. **Quantify.** For each finding: monthly spend at that site × expected reduction = monthly saving, with the reduction's basis shown (vendor's published discount, measured sample, or assumption). A model-tier change counts only after a side-by-side quality check on a sample the owner approves; until then it is listed as `pending eval`.
+4. **Apply every lever to every site.** Use the lever list below. Each site × lever cell is a finding, `n/a` with a reason, or `needs data` with what data.
 
-5. **Write the findings file** at `findings/YYYY-MM-DD-llm-cost-audit.md` in the working repo: baseline table first (spend by model and site), then findings ranked by monthly dollars, then the `n/a` and `needs data` cells.
+5. **Quantify.** For each finding: monthly spend at that site × expected reduction = monthly saving, with the reduction's basis shown (vendor's published discount, measured sample, or assumption). A model-tier change counts only after a side-by-side quality check on a sample the owner approves; until then it is listed as `pending eval`.
+
+6. **Write the findings file** at `findings/YYYY-MM-DD-llm-cost-audit.md` in the working repo: baseline table first (spend by model and site), then findings ranked by monthly dollars, then the `n/a` and `needs data` cells.
    Done when every row in step 1 appears in the file and every finding carries evidence, saving, risk and how to verify after the change.
 
 ## Levers
@@ -33,6 +36,9 @@ The target code may be a client's and untrusted. Read it; run nothing from it ou
 - **Raw store.** Every paid response is written to disk before parsing, so a parse bug or rerun never pays twice.
 - **Checkpoint.** A long loop persists each finished item, so a crash at 90% resumes instead of restarting from zero. A failed item is recorded as failed, never as done, or the rerun skips it and the work is lost.
 - **Retry discipline.** Backoff with a cap, retries only on retryable errors (429, 5xx), and no retry inside a retry. Count retries per run, since they are invisible on the bill.
+- **Payload.** Send only the fields the task reads. Strip markup, pretty-print whitespace and repeated long keys; prefer compact formats (CSV or terse keys over verbose JSON for tabular data); pass media by file reference rather than inline base64, at the resolution the task needs. The used-versus-sent ratio from step 3 sizes this lever.
+- **Flatten.** Many calls over items that share instructions become one call over a list, sized to the model's context and output limits. Deduplicate identical inputs before calling, and group items by shared context so it is sent once.
+- **Code first.** Work code can do runs before the call: counting, sums, filtering, sorting, joins, formatting, rule-based classification, date math. The model gets pre-digested input and does only the judgment.
 - **Bounded input.** Inputs are trimmed to what the task needs: excerpts over whole documents, downscaled images and video frames, a bounded time window. The same content appears once per prompt, not twice.
 - **Bounded output.** `max_output_tokens` set, structured output in place of verbose prose, no echoing the input back.
 - **Loops.** A model call inside an automatic loop (auto-refine, retry-until-score, agent loops) runs on demand or under a hard cap. A loop chasing a score that moves by noise on identical input multiplies spend for nothing.
@@ -40,7 +46,6 @@ The target code may be a client's and untrusted. Read it; run nothing from it ou
 - **Cadence.** A scheduled job runs as often as its inputs change, not more. A completion marker written only on success makes catch-up logic rerun the whole job on every trigger after a failure.
 - **Tools.** A plain text-generation call carries no agent tools. A call that runs as an agent reads files and runs commands, paying tokens for work nobody asked for.
 - **Billing route.** The same work on a cheaper route: batch, committed-use or provisioned capacity, or a flat-rate plan the owner already pays for.
-- **Fan-in.** Many small per-item calls that share context are combined into fewer calls where quality holds.
 - **Dead calls.** Results that nothing reads, duplicate calls for the same input in one run, calls from test or dev environments on the production key.
 - **Guardrail.** A spend cap or budget alert on the key or project, and a per-run cost log. Note it as a finding when absent even though it saves nothing directly; it catches the next regression.
 
