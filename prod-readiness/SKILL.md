@@ -12,6 +12,7 @@ Rate how a codebase is built, deployed, tested, observed and recovered, and turn
 ## Steps
 
 1. **Inventory the operation.** Build and deploy path, environments, CI, tests, scheduled jobs (including bots on a person's machine or in automation services), data stores, backups, monitoring, and who gets alerted.
+   When the owner doesn't know where jobs run, follow trails rather than memory: card statements and inbox for every service signed up to; provider usage by project and time of day (overnight means a server, working hours means a laptop); scheduled workflows across every repo the team owns; a read-only scan of each person's machine; and key rotation, where whatever breaks or keeps using an old key was a job nobody listed.
    Done when each item is named or recorded as absent.
 
 2. **Rate every check below** as `present`, `partial` or `missing`, each with evidence (`file:line`, config, or the absence searched for).
