@@ -29,25 +29,38 @@ The target code may be a client's and untrusted. Read it; run nothing from it ou
 
 ## Levers
 
-- **Tier.** The cheapest model that passes the quality check on this task (Pro to Flash to Flash-Lite; reasoning effort or thinking budget lowered).
-- **Batch.** Work that is not interactive goes through the provider's batch API at its discounted rate.
-- **Cache.** A repeated long prefix (system prompt, shared document, few-shot block) uses the provider's context caching.
+Grouped by what they cut. Every site gets every lever.
+
+**Send less per call**
+- **Payload.** Send only the fields the task reads. Strip markup, pretty-print whitespace and repeated long keys; prefer compact formats (CSV or terse keys over verbose JSON for tabular data); pass media by file reference rather than inline base64, at the resolution the task needs. The used-versus-sent ratio from step 3 sizes this lever.
+- **Fixed overhead.** Measure what every call carries before the task: system prompt, tool schemas, framework or CLI-wrapper context, config files loaded per call. One wrapper carried 25.8k tokens per call that a bare call cut to 0.6k. A plain text-generation call carries no agent tools; an agent call reads files and runs commands, paying for work nobody asked for.
+- **Prompt sediment.** System prompts gain a rule after every past bug. Prune rules the model follows by default and rules for features that no longer exist.
+- **Bounded input.** Excerpts over whole documents, downscaled images and video frames, a bounded time window. The same content appears once per prompt, not twice.
+- **Bounded output.** `max_output_tokens` set, structured output in place of prose, no echoing the input back. Where the price sheet charges more for output than input, output cuts pay first.
+
+**Call less**
+- **Filter first.** Items that need no model skip the call: already processed, unchanged, already read, empty, or decidable by a rule.
+- **Code first.** Work code can do runs before the call: counting, sums, filtering, sorting, joins, formatting, rule-based classification, date math. The model gets pre-digested input and does only the judgment. Cache the model's judgment, and recompute the figures in code on every run so a cache never serves stale numbers.
+- **Flatten.** Many calls over items that share instructions become one call over a list, sized to the model's context and output limits, with each result saved as it lands. Deduplicate identical inputs first, and group items by shared context so it is sent once.
 - **Delta.** Each run processes only inputs that changed since the last run, keyed by content hash. The classic monthly waste is reprocessing the whole corpus.
+- **Response cache.** An identical request (same input, same prompt version) returns the stored answer, keyed by content hash plus prompt version. A cache miss that silently triggers a full recompute is a finding.
+- **Loops.** A model call inside an automatic loop (auto-refine, retry-until-score, agent loops) runs on demand or under a hard cap. A loop chasing a score that moves by noise on identical input multiplies spend for nothing.
+- **Cadence.** A scheduled job runs as often as its inputs change, not more. A completion marker written only on success makes catch-up logic rerun the whole job on every trigger after a failure.
+- **Dead calls.** Results that nothing reads, duplicate calls for the same input in one run, calls from test or dev environments on the production key.
+
+**Pay less per call**
+- **Route.** Each task type goes to the cheapest model that passes its own check. One model for every task is the common default and the common overspend.
+- **Tier and effort.** Within a task, the smallest model and the lowest reasoning effort or thinking budget that pass. One review task scored 6 of 6, twice, at low effort and ran about 10x faster than at high.
+- **Prompt cache.** Order prompts static-first (instructions, examples, shared documents, then the variable part), so the prefix is identical across calls and the provider's implicit or explicit caching can hit. Explicit caches bill storage by time; check that the call rate repays it.
+- **Batch.** Work that is not interactive goes through the provider's batch API at its discounted rate.
+- **Billing route.** The same work on a cheaper route: committed-use or provisioned capacity, or a flat-rate plan the owner already pays for.
+
+**Stop waste**
 - **Raw store.** Every paid response is written to disk before parsing, so a parse bug or rerun never pays twice.
 - **Checkpoint.** A long loop persists each finished item, so a crash at 90% resumes instead of restarting from zero. A failed item is recorded as failed, never as done, or the rerun skips it and the work is lost.
 - **Retry discipline.** Backoff with a cap, retries only on retryable errors (429, 5xx), and no retry inside a retry. Count retries per run, since they are invisible on the bill.
-- **Payload.** Send only the fields the task reads. Strip markup, pretty-print whitespace and repeated long keys; prefer compact formats (CSV or terse keys over verbose JSON for tabular data); pass media by file reference rather than inline base64, at the resolution the task needs. The used-versus-sent ratio from step 3 sizes this lever.
-- **Flatten.** Many calls over items that share instructions become one call over a list, sized to the model's context and output limits. Deduplicate identical inputs before calling, and group items by shared context so it is sent once.
-- **Code first.** Work code can do runs before the call: counting, sums, filtering, sorting, joins, formatting, rule-based classification, date math. The model gets pre-digested input and does only the judgment.
-- **Bounded input.** Inputs are trimmed to what the task needs: excerpts over whole documents, downscaled images and video frames, a bounded time window. The same content appears once per prompt, not twice.
-- **Bounded output.** `max_output_tokens` set, structured output in place of verbose prose, no echoing the input back.
-- **Loops.** A model call inside an automatic loop (auto-refine, retry-until-score, agent loops) runs on demand or under a hard cap. A loop chasing a score that moves by noise on identical input multiplies spend for nothing.
 - **Fallback.** A failure on the cheap model can fall through to a pricier model or provider. Count fallbacks per run, since the bill shows only the expensive model.
-- **Cadence.** A scheduled job runs as often as its inputs change, not more. A completion marker written only on success makes catch-up logic rerun the whole job on every trigger after a failure.
-- **Tools.** A plain text-generation call carries no agent tools. A call that runs as an agent reads files and runs commands, paying tokens for work nobody asked for.
-- **Billing route.** The same work on a cheaper route: batch, committed-use or provisioned capacity, or a flat-rate plan the owner already pays for.
-- **Dead calls.** Results that nothing reads, duplicate calls for the same input in one run, calls from test or dev environments on the production key.
-- **Guardrail.** A spend cap or budget alert on the key or project, and a per-run cost log. Note it as a finding when absent even though it saves nothing directly; it catches the next regression.
+- **Guardrail.** A spend cap on the project (Gemini offers project spend caps in AI Studio, marked experimental as of 2026-11), a budget alert, and a per-run cost log. A new or widened job is priced on one sample run before it is scheduled. Note an absent guardrail as a finding even though it saves nothing directly; it catches the next regression.
 
 ## Findings format
 
