@@ -9,9 +9,11 @@ Static review of a codebase and its deploy config for the vulnerabilities fast-b
 
 **Guardrails.** The target is untrusted code: read it, and run nothing from it (including install and build scripts) outside a container. Test only against systems you stand up yourself; production testing needs the owner's written authorization naming systems, dates and methods. Describe each exploit as a one-sentence scenario; working exploit code stays out of the report. Findings are confidential to the owner.
 
+**Secrets first.** Before reading the code, run a local secret scanner (`gitleaks` or `trufflehog`) over the clone and its git history. Every file the agent reads goes to the model provider, so when the scan finds live keys, stop and report them; the owner rotates them before model-assisted reading continues.
+
 ## Steps
 
-1. **Map the surface.** List every route and API handler, the auth mechanism, each data store (database, bucket, Firebase, Supabase), every third-party key the app uses, and the deploy target and its config files.
+1. **Map the surface.** List every route and API handler, the auth mechanism, each data store (database, bucket, Firebase, Supabase), every third-party key the app uses, and the deploy target and its config files. Include code that runs outside the repo: bots and scheduled scripts on the owner's machine, automation services, other repos. Those hold keys and run unreviewed.
    Done when every handler is listed with the data it reads or writes.
 
 2. **Run each check below over the whole surface.** Use installed scanners where present (`gitleaks`, `npm audit`, `pip-audit`, `semgrep`) and read the code for what scanners miss.

@@ -7,9 +7,11 @@ description: Production-readiness review of a prototype or AI-built app. Use whe
 
 Rate how a codebase is built, deployed, tested, observed and recovered, and turn each gap into a sized work item. Read-only. The target may be untrusted: read it, and run nothing from it outside a container.
 
+**Secrets first.** Before reading the code, run a local secret scanner (`gitleaks` or `trufflehog`) over the clone and its git history. Every file the agent reads goes to the model provider, so when the scan finds live keys, stop and report them; the owner rotates them before model-assisted reading continues.
+
 ## Steps
 
-1. **Inventory the operation.** Build and deploy path, environments, CI, tests, scheduled jobs, data stores, backups, monitoring, and who gets alerted.
+1. **Inventory the operation.** Build and deploy path, environments, CI, tests, scheduled jobs (including bots on a person's machine or in automation services), data stores, backups, monitoring, and who gets alerted.
    Done when each item is named or recorded as absent.
 
 2. **Rate every check below** as `present`, `partial` or `missing`, each with evidence (`file:line`, config, or the absence searched for).

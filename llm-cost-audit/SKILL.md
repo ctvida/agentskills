@@ -9,12 +9,15 @@ Find every paid model call in a codebase, tie the bill to call sites, and rank s
 
 The target code may be a client's and untrusted. Read it; run nothing from it outside a container.
 
+**Secrets first.** Before reading the code, run a local secret scanner (`gitleaks` or `trufflehog`) over the clone and its git history. Every file the agent reads goes to the model provider, so when the scan finds live keys, stop and report them; the owner rotates them before model-assisted reading continues.
+
 ## Steps
 
 1. **Inventory call sites.** Search for model SDK imports and endpoints: `google-genai`, `@google/generative-ai`, `vertexai`, the `generativelanguage` REST host, `openai`, `anthropic`, `openrouter.ai`, plus any raw HTTP client calling them. For each site, record `file:line`, the model id **as it reaches the request** (trace config to the call, since configured and sent model ids drift), the trigger (user request, cron, batch, queue), the input source, and whether output is stored.
    Done when every call site has a row, including ones inside loops, retries and fallbacks.
 
 2. **Tie the bill to the sites.** Read the billing export (by model and SKU, monthly). Attribute spend to call sites by model, SKU (input, output, cached, thinking tokens), and trigger timing. When there is no bill, estimate tokens × current list price from logs or sample inputs, and label every number an *estimate*. Fetch the current price sheet at run time and record its date; prices move.
+   Spend that maps to no call site in the repo usually runs from code outside it: scripts or bots on someone's machine, automation services, notebooks, another repo. Inventory those with the owner.
    Done when 90% or more of spend maps to named sites, or the unmapped share is stated.
 
 3. **Measure the payloads.** For each site in the top 80% of spend (the tail rarely repays the capture work), capture real requests and break each prompt into its parts: instructions, examples, data, serialization overhead (keys, whitespace, markup), and media. Record tokens per part and what share of the data the output actually uses. Twenty requests per site shows what a prompt is made of; this measures composition, not an average, so more adds little.
