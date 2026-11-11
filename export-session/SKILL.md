@@ -24,7 +24,7 @@ When the operator invokes `/export-session`:
 2. **Next action is driven by Objective or unblocked Backlog item.**
    - Derive `next_action` directly from `objective.md`, the standing project goal, or the next unblocked item in `backlog.md` / `BACKLOG.md`, not just the micro-task touched last.
    - Follow the required four-part shape: Objective, Plan (a pointer), Standing instruction, Done-when.
-   - **Every replaced objective lands in one of two files beside the `_index.md`.** Met: add the old `next_action` verbatim to `BACKLOG-DONE.md` with what settled each done-when item. Not met: it goes verbatim to the top of `BACKLOG.md` (newest first, LIFO: the top item is the next one promoted). The global pre-commit hook enforces this: a commit that changes the Objective part of `next_action` with the old text in neither file stops, after the hook writes the old text to the top of `BACKLOG.md` for review and staging. `KEEP_OBJECTIVE=1` on the commit marks the same objective reworded.
+   - **Every replaced objective lands in one of two files beside the `_index.md`.** Met: add the old `next_action` verbatim to `BACKLOG-DONE.md` with what settled each done-when item. Not met: it goes verbatim to the top of `BACKLOG.md` (newest first, LIFO: the top item is the next one promoted). The global pre-commit hook backs this up: when a commit changes the Objective part of `next_action` and the old text is in neither file, the hook writes it to the top of `BACKLOG.md` and adds it to that same commit. `KEEP_OBJECTIVE=1` on the commit marks the same objective reworded.
 3. **Verification with the operator:**
    - **Unless stated by the operator in the prompt that no verification is needed** (e.g., "no verification needed", "--no-verify", "just export"):
      - You MUST pause tool execution immediately.
@@ -103,10 +103,13 @@ its done-when, item by item, against what actually happened. If every item is
 settled by a command or a file:
 
 1. Say which done-when items are met and what settles each -- a command's
-   output, a path, a commit. Evidence, not assertion.
+   output, a path, a commit. Evidence, not assertion. Write the same record to
+   `BACKLOG-DONE.md` beside the `_index.md`: the met `next_action` verbatim, the
+   date, and the evidence per item. That file is how the pre-commit hook knows
+   the objective was met rather than displaced.
 2. **A met objective is not a finished project (Automated Backlog Survey).** When the active objective is met (or when the current plan has closed), `/export-session` MUST inspect the project's backlog (`backlog.md` or `BACKLOG.md`) and any plan with open steps:
    - **Survey backlog items:** Identify open items whose triggers have fired or unblocked engineering tasks.
-   - **Auto-draft the next backlog item:** If an unblocked engineering item exists, `/export-session` must automatically draft that item as the new `next_action` in the required four-part shape (Objective, Plan pointer, Standing instruction, Done-when) rather than leaving the project stalled or clearing the card. Cite the backlog item number, title, and trigger.
+   - **Auto-draft the next backlog item:** `BACKLOG.md` is newest first (LIFO); take the topmost unblocked item. If an unblocked engineering item exists, `/export-session` must automatically draft that item as the new `next_action` in the required four-part shape (Objective, Plan pointer, Standing instruction, Done-when) rather than leaving the project stalled or clearing the card. Cite the backlog item number, title, and trigger.
    - **Operator waits never stall `next_action`:** If the next step in the current plan requires manual human action (such as operator review, external sign-off, or credentials), place that requirement exclusively into `## Operator next steps`. Do NOT stall `next_action` with a holding statement like "Waits on operator". Instead, inspect `backlog.md` for independent, unblocked engineering items and draft the next one into `next_action`.
    - **Completion proposed only when backlog is empty:** Only propose completion when `backlog.md` and active plans hold zero unblocked items. Never conclude a project silently.
 3. **Propose completion and wait**, only when nothing is open. The operator confirms or names what is
