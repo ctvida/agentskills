@@ -137,7 +137,7 @@ the standing project goal.
 The resume point has four parts, in this order:
 
 1. **Objective**: the outcome, and why it matters. Driven by the project objective, not a micro-task. Not "run X", but what is true when X has been run and everything it implies is done.
-2. **Plan**: the ordered steps that get there, in the project file. The resume point points at them; it does not inline them.
+2. **Plan**: the ordered steps that get there, in the project file. The resume point points at them; it does not inline them. Each step names what it waits on: `needs: step 2`, `needs: CT's ruling on X`, or `needs: nothing`. A step that needs nothing from CT and no earlier step is done in this session before the export, not listed for later; one left listed says why (out of session time, a paid call awaiting CT's go).
 3. **Standing instruction**: explicit permission to continue: work the plan top to bottom in one pass, do not stop after step 1, commit per step, and if a step blocks, record the blocker in the project file and continue with the next independent step.
 4. **Done-when**: a short checkable list. Each item is something a command or a file can settle, not a feeling. This is the stop condition; without it, "continue until done" has no end and the agent either quits early or runs forever.
 
