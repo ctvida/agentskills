@@ -24,7 +24,7 @@ When the operator invokes `/export-session`:
 2. **Next action is driven by Objective or unblocked Backlog item.**
    - Derive `next_action` directly from `objective.md`, the standing project goal, or the next unblocked item in `backlog.md` / `BACKLOG.md`, not just the micro-task touched last.
    - Follow the required four-part shape: Objective, Plan (a pointer), Standing instruction, Done-when.
-   - **Park a replaced objective in `BACKLOG.md`.** When a new objective displaces one that is not yet met, append the old `next_action` verbatim as a numbered item in the `BACKLOG.md` beside the `_index.md` (create it if missing), with the date and what displaced it. `BACKLOG.md` is the one place the backlog survey reads; the global pre-commit hook refuses a backlog section inside `_index.md`.
+   - **Every replaced objective lands in one of two files beside the `_index.md`.** Met: add the old `next_action` verbatim to `BACKLOG-DONE.md` with what settled each done-when item. Not met: it goes verbatim to the top of `BACKLOG.md` (newest first, LIFO: the top item is the next one promoted). The global pre-commit hook enforces this: a commit that changes the Objective part of `next_action` with the old text in neither file stops, after the hook writes the old text to the top of `BACKLOG.md` for review and staging. `KEEP_OBJECTIVE=1` on the commit marks the same objective reworded.
 3. **Verification with the operator:**
    - **Unless stated by the operator in the prompt that no verification is needed** (e.g., "no verification needed", "--no-verify", "just export"):
      - You MUST pause tool execution immediately.
